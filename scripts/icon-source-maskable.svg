@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#0a0a0a" />
+  <!-- Same mark as icon-source.svg, scaled down so it stays within the
+       maskable "safe zone" (the central ~80% that survives OS masking). -->
+  <g transform="translate(256 256) scale(0.62)">
+    <path d="M -140 -70 L 0 -95 L 0 95 L -140 70 Z" fill="none" stroke="#f5f5f5" stroke-width="14" stroke-linejoin="round" />
+    <path d="M 140 -70 L 0 -95 L 0 95 L 140 70 Z" fill="none" stroke="#f5f5f5" stroke-width="14" stroke-linejoin="round" />
+    <line x1="-95" y1="-40" x2="-30" y2="-52" stroke="#f5f5f5" stroke-width="10" stroke-linecap="round" />
+    <line x1="-95" y1="-5" x2="-30" y2="-17" stroke="#f5f5f5" stroke-width="10" stroke-linecap="round" />
+    <line x1="-95" y1="30" x2="-30" y2="18" stroke="#f5f5f5" stroke-width="10" stroke-linecap="round" />
+    <line x1="95" y1="-40" x2="30" y2="-52" stroke="#f5f5f5" stroke-width="10" stroke-linecap="round" />
+    <line x1="95" y1="-5" x2="30" y2="-17" stroke="#f5f5f5" stroke-width="10" stroke-linecap="round" />
+    <line x1="95" y1="30" x2="30" y2="18" stroke="#f5f5f5" stroke-width="10" stroke-linecap="round" />
+  </g>
+</svg>
