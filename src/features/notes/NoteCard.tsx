@@ -6,6 +6,7 @@ import { deleteNote, updateNote } from '../../db/notes.repo'
 import { useAutosave } from '../entry/useAutosave'
 import { DragHandleIcon, TrashIcon } from '../../components/icons'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
+import { triggerSync } from '../../sync/triggerSync'
 import { ChecklistEditor } from './ChecklistEditor'
 
 interface NoteCardProps {
@@ -24,6 +25,7 @@ export function NoteCard({ note }: NoteCardProps) {
 
   useAutosave({ title, body, checklist }, async (value) => {
     await updateNote(note.id, value)
+    triggerSync()
   })
 
   const style = {
@@ -87,6 +89,7 @@ export function NoteCard({ note }: NoteCardProps) {
         onConfirm={async () => {
           await deleteNote(note.id)
           setConfirmDelete(false)
+          triggerSync()
         }}
       />
     </div>

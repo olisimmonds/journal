@@ -45,15 +45,6 @@ export function SearchIcon(props: IconProps) {
   )
 }
 
-export function SettingsIcon(props: IconProps) {
-  return (
-    <svg {...base} {...props}>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.36.61.99 1 1.51 1H21a2 2 0 0 1 0 4h-.09c-.52 0-1.15.39-1.51 1Z" />
-    </svg>
-  )
-}
-
 export function PlusIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
@@ -93,23 +84,6 @@ export function ChevronRightIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
       <path d="m9 18 6-6-6-6" />
-    </svg>
-  )
-}
-
-export function CloudIcon(props: IconProps) {
-  return (
-    <svg {...base} {...props}>
-      <path d="M7 17a4 4 0 1 1 .8-7.93A5.5 5.5 0 0 1 18 11.5a3.5 3.5 0 0 1-1 6.86H7Z" />
-    </svg>
-  )
-}
-
-export function LockIcon(props: IconProps) {
-  return (
-    <svg {...base} {...props}>
-      <rect x="5" y="11" width="14" height="9" rx="2" />
-      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
     </svg>
   )
 }

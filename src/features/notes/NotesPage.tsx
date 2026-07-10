@@ -18,6 +18,7 @@ import { createNote, listNotes, reorderNotes } from '../../db/notes.repo'
 import { Button } from '../../components/Button'
 import { EmptyState } from '../../components/EmptyState'
 import { PlusIcon } from '../../components/icons'
+import { triggerSync } from '../../sync/triggerSync'
 import { NoteCard } from './NoteCard'
 
 /** Persistent notes tab, independent of the calendar. Supports drag-to-reorder. */
@@ -39,13 +40,19 @@ export function NotesPage() {
 
     const reordered = arrayMove(notes, oldIndex, newIndex)
     await reorderNotes(reordered.map((n) => n.id))
+    triggerSync()
+  }
+
+  const handleCreateNote = async () => {
+    await createNote()
+    triggerSync()
   }
 
   return (
     <div className="safe-top mx-auto max-w-lg px-4 pt-6">
       <header className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold text-ink-primary">Notes</h1>
-        <Button variant="ghost" onClick={() => createNote()} aria-label="New note">
+        <Button variant="ghost" onClick={handleCreateNote} aria-label="New note">
           <PlusIcon />
         </Button>
       </header>
@@ -55,7 +62,7 @@ export function NotesPage() {
           title="No notes yet"
           description="Notes are separate from your calendar journal and stick around until you delete them."
           action={
-            <Button variant="primary" onClick={() => createNote()}>
+            <Button variant="primary" onClick={handleCreateNote}>
               Create your first note
             </Button>
           }

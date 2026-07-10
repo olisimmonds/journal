@@ -13,6 +13,7 @@ import { formatFullDate } from '../../utils/date'
 import { Button } from '../../components/Button'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { ChevronLeftIcon, TrashIcon } from '../../components/icons'
+import { triggerSync } from '../../sync/triggerSync'
 import { EntryEditor } from './EntryEditor'
 import { ImageGallery } from './ImageGallery'
 import { useAutosave } from './useAutosave'
@@ -48,6 +49,7 @@ function EntryPageContent({ dateId }: { dateId: string }) {
 
   const saveStatus = useAutosave({ title, body }, async (value) => {
     await upsertEntry(dateId, value)
+    triggerSync()
   })
 
   const handleAddImages = async (files: File[]) => {
@@ -57,18 +59,34 @@ function EntryPageContent({ dateId }: { dateId: string }) {
     for (const file of files) {
       await addImageToEntry(dateId, file, file.type || 'image/jpeg')
     }
+    triggerSync()
+  }
+
+  const handleRemoveImage = async (imageId: string) => {
+    await removeImage(imageId)
+    triggerSync()
   }
 
   const handleDelete = async () => {
     await deleteEntry(dateId)
     setConfirmDelete(false)
+    triggerSync()
+    navigate('/')
+  }
+
+  const handleBack = async () => {
+    // Flush the latest edit immediately rather than relying on the debounce
+    // timer, which is cancelled on unmount and would otherwise drop an edit
+    // made in the last 600ms before navigating away.
+    await upsertEntry(dateId, { title, body })
+    triggerSync()
     navigate('/')
   }
 
   return (
     <div className="safe-top mx-auto max-w-lg px-4 pt-4">
       <header className="mb-4 flex items-center justify-between">
-        <Button variant="ghost" className="px-2" onClick={() => navigate('/')} aria-label="Back to calendar">
+        <Button variant="ghost" className="px-2" onClick={handleBack} aria-label="Back to calendar">
           <ChevronLeftIcon />
         </Button>
         <p className="text-sm text-ink-secondary">{formatFullDate(dateId)}</p>
@@ -94,7 +112,7 @@ function EntryPageContent({ dateId }: { dateId: string }) {
         <ImageGallery
           images={images}
           onAddImages={handleAddImages}
-          onRemoveImage={(imageId) => removeImage(imageId)}
+          onRemoveImage={handleRemoveImage}
         />
       </div>
 

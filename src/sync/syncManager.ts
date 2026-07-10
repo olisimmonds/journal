@@ -1,13 +1,5 @@
-import { getSessionKey, getStoredSaltBase64 } from '../crypto/passphrase.session'
 import { db } from '../db/schema'
-import {
-  buildBackupData,
-  decryptBackup,
-  deserializeImage,
-  encryptBackup,
-  type BackupData,
-  type EncryptedBackupEnvelope,
-} from './backupSerializer'
+import { buildBackupData, deserializeImage, type BackupData } from './backupSerializer'
 import { downloadBackupContent, findBackupFileId, uploadBackupContent } from './driveClient'
 import { requestDriveAccessToken, signOutOfGoogleDrive } from './googleAuth'
 
@@ -33,12 +25,6 @@ export interface SyncResult {
  * devices — not a general-purpose CRDT/multi-writer merge.
  */
 export async function syncWithGoogleDrive(): Promise<SyncResult> {
-  const key = getSessionKey()
-  if (!key) throw new Error('Cannot sync while the journal is locked.')
-
-  const saltBase64 = getStoredSaltBase64()
-  if (!saltBase64) throw new Error('No local encryption salt found on this device.')
-
   const accessToken = await requestDriveAccessToken()
   const fileId = await findBackupFileId(accessToken)
 
@@ -47,14 +33,12 @@ export async function syncWithGoogleDrive(): Promise<SyncResult> {
 
   if (fileId) {
     const raw = await downloadBackupContent(accessToken, fileId)
-    const envelope = JSON.parse(raw) as EncryptedBackupEnvelope
-    const remote = await decryptBackup(envelope, key)
+    const remote = JSON.parse(raw) as BackupData
     ;({ mergedEntries, mergedNotes } = await mergeRemoteIntoLocal(remote))
   }
 
   const localData = await buildBackupData()
-  const envelope = await encryptBackup(localData, key, saltBase64)
-  await uploadBackupContent(accessToken, fileId, JSON.stringify(envelope))
+  await uploadBackupContent(accessToken, fileId, JSON.stringify(localData))
 
   const pushedAt = Date.now()
   localStorage.setItem(LAST_SYNCED_STORAGE_KEY, String(pushedAt))
@@ -63,7 +47,7 @@ export async function syncWithGoogleDrive(): Promise<SyncResult> {
 }
 
 /**
- * Merges a decrypted remote backup into the local database.
+ * Merges a remote backup into the local database.
  *
  * Tombstones are applied first and always win over an older remote copy,
  * so a deletion made on one device is never resurrected by an older backup

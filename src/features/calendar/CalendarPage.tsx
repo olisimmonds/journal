@@ -3,7 +3,7 @@ import { Button } from '../../components/Button'
 import { ChevronLeftIcon, ChevronRightIcon } from '../../components/icons'
 import { formatMonthLabel, getMonthGrid, todayDateId, WEEKDAY_LABELS } from '../../utils/date'
 import { DayCell } from './DayCell'
-import { useMonthEntryDateIds } from './useMonthEntries'
+import { useMonthEntryTitles } from './useMonthEntries'
 
 /** Home page: a monthly calendar grid. Tap any day to open its journal entry. */
 export function CalendarPage() {
@@ -12,7 +12,7 @@ export function CalendarPage() {
   const [month, setMonth] = useState(now.getMonth())
 
   const grid = getMonthGrid(year, month)
-  const entryDateIds = useMonthEntryDateIds(year, month)
+  const entryTitles = useMonthEntryTitles(year, month)
   const today = todayDateId()
 
   const goToPreviousMonth = () => {
@@ -69,7 +69,8 @@ export function CalendarPage() {
             key={day.dateId}
             day={day}
             isToday={day.dateId === today}
-            hasEntry={entryDateIds?.has(day.dateId) ?? false}
+            hasEntry={entryTitles?.has(day.dateId) ?? false}
+            title={entryTitles?.get(day.dateId)}
           />
         ))}
       </div>

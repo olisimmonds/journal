@@ -6,7 +6,7 @@
 
 const DRIVE_FILES_ENDPOINT = 'https://www.googleapis.com/drive/v3/files'
 const DRIVE_UPLOAD_ENDPOINT = 'https://www.googleapis.com/upload/drive/v3/files'
-const BACKUP_FILE_NAME = 'journal-backup.json.enc'
+const BACKUP_FILE_NAME = 'journal-backup.json'
 
 async function driveFetch(
   accessToken: string,

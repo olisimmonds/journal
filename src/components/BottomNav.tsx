@@ -1,11 +1,10 @@
 import { NavLink } from 'react-router-dom'
-import { CalendarIcon, NotesIcon, SearchIcon, SettingsIcon } from './icons'
+import { CalendarIcon, NotesIcon, SearchIcon } from './icons'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Calendar', icon: CalendarIcon, end: true },
   { to: '/notes', label: 'Notes', icon: NotesIcon, end: false },
   { to: '/search', label: 'Search', icon: SearchIcon, end: false },
-  { to: '/settings', label: 'Settings', icon: SettingsIcon, end: false },
 ]
 
 /** Fixed bottom tab bar — the app's primary navigation on every screen size. */

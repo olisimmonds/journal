@@ -79,6 +79,14 @@ export function signOutOfGoogleDrive(): void {
   cachedAccessToken = null
 }
 
+// Sync is triggered from several places in quick succession (autosave, image
+// add/remove, note edits, app load, reconnect). Without this guard, each of
+// those would spin up its own Google Identity Services token client at the
+// same time — overlapping popups is exactly what made the sign-in dialog
+// look like it kept reopening/reloading. Concurrent callers now all await
+// the same in-flight request instead of opening a second popup.
+let pendingTokenRequest: Promise<string> | null = null
+
 /**
  * Requests an access token, prompting the Google sign-in/consent popup only
  * when necessary (first use, or after the cached token expires).
@@ -87,6 +95,15 @@ export async function requestDriveAccessToken(): Promise<string> {
   const cached = getCachedAccessToken()
   if (cached) return cached
 
+  if (pendingTokenRequest) return pendingTokenRequest
+
+  pendingTokenRequest = requestNewAccessToken().finally(() => {
+    pendingTokenRequest = null
+  })
+  return pendingTokenRequest
+}
+
+async function requestNewAccessToken(): Promise<string> {
   await loadGisScript()
   const clientId = getClientId()
 
@@ -112,6 +129,6 @@ export async function requestDriveAccessToken(): Promise<string> {
       },
     })
 
-    tokenClient.requestAccessToken({ prompt: cached ? '' : 'consent' })
+    tokenClient.requestAccessToken({ prompt: 'consent' })
   })
 }
