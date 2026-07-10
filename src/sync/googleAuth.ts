@@ -77,6 +77,7 @@ export function getCachedAccessToken(): string | null {
 
 export function signOutOfGoogleDrive(): void {
   cachedAccessToken = null
+  lastAuthFailure = null
 }
 
 // Sync is triggered from several places in quick succession (autosave, image
@@ -86,6 +87,16 @@ export function signOutOfGoogleDrive(): void {
 // look like it kept reopening/reloading. Concurrent callers now all await
 // the same in-flight request instead of opening a second popup.
 let pendingTokenRequest: Promise<string> | null = null
+
+// If sign-in is failing (wrong origin, account not added as a test user,
+// popup blocked, etc.), every subsequent action still calls triggerSync(),
+// and without this cooldown each one would retry the OAuth handshake from
+// scratch — reopening a new popup (or, when mobile browsers block the
+// popup, a new tab) on every autosave. While a recent attempt is still
+// within the cooldown, callers get the same cached failure instead of
+// triggering another sign-in attempt.
+const AUTH_FAILURE_COOLDOWN_MS = 30_000
+let lastAuthFailure: { error: Error; failedAt: number } | null = null
 
 /**
  * Requests an access token, prompting the Google sign-in/consent popup only
@@ -97,9 +108,25 @@ export async function requestDriveAccessToken(): Promise<string> {
 
   if (pendingTokenRequest) return pendingTokenRequest
 
-  pendingTokenRequest = requestNewAccessToken().finally(() => {
-    pendingTokenRequest = null
-  })
+  if (lastAuthFailure && Date.now() - lastAuthFailure.failedAt < AUTH_FAILURE_COOLDOWN_MS) {
+    throw lastAuthFailure.error
+  }
+
+  pendingTokenRequest = requestNewAccessToken()
+    .then((token) => {
+      lastAuthFailure = null
+      return token
+    })
+    .catch((err: unknown) => {
+      lastAuthFailure = {
+        error: err instanceof Error ? err : new Error('Google sign-in failed.'),
+        failedAt: Date.now(),
+      }
+      throw err
+    })
+    .finally(() => {
+      pendingTokenRequest = null
+    })
   return pendingTokenRequest
 }
 
