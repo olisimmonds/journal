@@ -1,3 +1,8 @@
+# To do
+- Where can I see this data in drive
+- Get working on phone
+- Seems there may be a bug with repeated asks for auth
+
 # Journal
 
 A private, offline-first journal and notes PWA. React + TypeScript + Vite, data stored locally
@@ -12,15 +17,10 @@ Android, and desktop, and works fully offline.
 - **Notes** — separate from the calendar, unlimited notes, checklists, drag-to-reorder, autosave.
 - **Privacy** — all data lives in IndexedDB on your device. Cloud backup is a single JSON file
   stored in a hidden, app-only Google Drive folder that only this app (signed in as you) can see.
-- **Continuous Drive sync** — no settings screen, no manual "sync now" button. Every save (an
-  entry autosaving, a note being created/edited/deleted/reordered) triggers a Drive sync in the
-  background. Sync failures are never silent — a red banner appears immediately and stays until
-  dismissed or the next sync succeeds.
+- **Continuous Drive sync** — Every save (an entry autosaving, a note being created/edited/
+  deleted/reordered) triggers a Drive sync in the background.
 - **PWA** — installable on iOS/Android/desktop, works fully offline, dark grayscale UI optimized
   for one-handed mobile use.
-
-There is deliberately no Settings page, no export/import, and no "erase all data" control —
-this is a minimal, single-purpose app for one person.
 
 ## Tech stack
 
