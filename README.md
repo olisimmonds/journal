@@ -1,8 +1,5 @@
 # To do
 - Remove env file
-- Where can I see this data in drive
-- Get working on phone - when running on clone it says autherisation blovked by google and it keeps popping up repeatedly opening loads of tabs
-- Seems there may be a bug with repeated asks for auth on the web still as well
 
 # Journal
 
