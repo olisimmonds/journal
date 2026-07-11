@@ -1,14 +1,15 @@
 /**
  * Google OAuth via Google Identity Services (GIS), requesting only the
- * narrow `drive.appdata` scope — this grants access exclusively to a
- * hidden per-app folder in the user's Drive, never their visible files.
+ * narrow `drive.file` scope — this grants access exclusively to files this
+ * app itself creates in Drive (the single visible backup file it writes),
+ * never your other Drive files.
  *
  * The access token is kept in memory only (never persisted) and is short
  * lived (~1 hour); callers should request a fresh one before each sync.
  */
 
 const GIS_SCRIPT_SRC = 'https://accounts.google.com/gsi/client'
-const DRIVE_APPDATA_SCOPE = 'https://www.googleapis.com/auth/drive.appdata'
+const DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 
 declare global {
   interface Window {
@@ -78,6 +79,7 @@ export function getCachedAccessToken(): string | null {
 export function signOutOfGoogleDrive(): void {
   cachedAccessToken = null
   lastAuthFailure = null
+  localStorage.removeItem(HAS_GRANTED_STORAGE_KEY)
 }
 
 // Sync is triggered from several places in quick succession (autosave, image
@@ -98,9 +100,23 @@ let pendingTokenRequest: Promise<string> | null = null
 const AUTH_FAILURE_COOLDOWN_MS = 30_000
 let lastAuthFailure: { error: Error; failedAt: number } | null = null
 
+// Once the user has granted Drive access at least once on this browser,
+// later token renewals try a silent request first (`prompt: ''`) — Google
+// can reissue a token with no popup at all if the browser session and
+// grant are still valid, which is what makes repeat sign-ins on the same
+// device mostly invisible. Only falls back to the interactive consent
+// popup if the silent attempt fails (e.g. the grant was revoked, or this
+// is genuinely a new browser/device).
+const HAS_GRANTED_STORAGE_KEY = 'journal.sync.hasGrantedDriveAccess'
+
+function hasGrantedBefore(): boolean {
+  return localStorage.getItem(HAS_GRANTED_STORAGE_KEY) === 'true'
+}
+
 /**
  * Requests an access token, prompting the Google sign-in/consent popup only
- * when necessary (first use, or after the cached token expires).
+ * when necessary (first use, a revoked grant, or after a silent renewal
+ * attempt fails).
  */
 export async function requestDriveAccessToken(): Promise<string> {
   const cached = getCachedAccessToken()
@@ -134,10 +150,22 @@ async function requestNewAccessToken(): Promise<string> {
   await loadGisScript()
   const clientId = getClientId()
 
+  if (hasGrantedBefore()) {
+    try {
+      return await requestTokenWithPrompt(clientId, '')
+    } catch {
+      // Silent renewal failed — fall through to an interactive prompt.
+    }
+  }
+
+  return requestTokenWithPrompt(clientId, 'consent')
+}
+
+function requestTokenWithPrompt(clientId: string, prompt: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const tokenClient = window.google!.accounts.oauth2.initTokenClient({
       client_id: clientId,
-      scope: DRIVE_APPDATA_SCOPE,
+      scope: DRIVE_FILE_SCOPE,
       callback: (response) => {
         if (response.error || !response.access_token) {
           reject(new Error(response.error ?? 'Google sign-in did not return an access token.'))
@@ -149,6 +177,7 @@ async function requestNewAccessToken(): Promise<string> {
           token: response.access_token,
           expiresAt: Date.now() + 55 * 60 * 1000,
         }
+        localStorage.setItem(HAS_GRANTED_STORAGE_KEY, 'true')
         resolve(response.access_token)
       },
       error_callback: (error) => {
@@ -156,6 +185,6 @@ async function requestNewAccessToken(): Promise<string> {
       },
     })
 
-    tokenClient.requestAccessToken({ prompt: 'consent' })
+    tokenClient.requestAccessToken({ prompt })
   })
 }

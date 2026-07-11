@@ -1,7 +1,13 @@
 /**
- * Minimal Google Drive REST client scoped to the hidden `appDataFolder`.
- * Deliberately hand-rolled with `fetch` rather than the full Google API
- * client library, since we only ever need to read/write a single file.
+ * Minimal Google Drive REST client. Deliberately hand-rolled with `fetch`
+ * rather than the full Google API client library, since we only ever need
+ * to read/write a single file.
+ *
+ * The backup file lives as a normal, visible file in the root of "My Drive"
+ * (not the hidden `appDataFolder`) so you can find it, open it, or download
+ * it yourself at any time — see the `drive.file` scope in `googleAuth.ts`,
+ * which only grants access to files this app itself created, not your
+ * other Drive files.
  */
 
 const DRIVE_FILES_ENDPOINT = 'https://www.googleapis.com/drive/v3/files'
@@ -26,10 +32,9 @@ async function driveFetch(
   return response
 }
 
-/** Finds the app's single backup file in appDataFolder, if it exists yet. */
+/** Finds the app's single backup file in "My Drive", if it exists yet. */
 export async function findBackupFileId(accessToken: string): Promise<string | null> {
   const params = new URLSearchParams({
-    spaces: 'appDataFolder',
     q: `name = '${BACKUP_FILE_NAME}' and trashed = false`,
     fields: 'files(id, modifiedTime)',
   })
@@ -69,7 +74,9 @@ export async function uploadBackupContent(
   }
 
   const boundary = 'journal-backup-boundary'
-  const metadata = { name: BACKUP_FILE_NAME, parents: ['appDataFolder'] }
+  // No `parents` — Drive defaults to creating the file in the root of "My
+  // Drive", where you can see it directly.
+  const metadata = { name: BACKUP_FILE_NAME }
 
   const multipartBody = [
     `--${boundary}`,
