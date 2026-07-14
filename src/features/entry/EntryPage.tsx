@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   addImageToEntry,
   deleteEntry,
@@ -28,6 +28,12 @@ export function EntryPage() {
 
 function EntryPageContent({ dateId }: { dateId: string }) {
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // The calendar records which view it opened this entry from, so closing the
+  // entry returns to that exact zoom level and date rather than resetting to
+  // the default month. Falls back to the calendar root for a direct deep link.
+  const backTo = (location.state as { from?: string } | null)?.from ?? '/'
 
   const loadedEntry = useLiveQuery(
     async () => ({ entry: await getEntry(dateId) }),
@@ -71,7 +77,7 @@ function EntryPageContent({ dateId }: { dateId: string }) {
     await deleteEntry(dateId)
     setConfirmDelete(false)
     triggerSync()
-    navigate('/')
+    navigate(backTo)
   }
 
   const handleBack = async () => {
@@ -80,7 +86,7 @@ function EntryPageContent({ dateId }: { dateId: string }) {
     // made in the last 600ms before navigating away.
     await upsertEntry(dateId, { title, body })
     triggerSync()
-    navigate('/')
+    navigate(backTo)
   }
 
   return (
