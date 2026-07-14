@@ -60,12 +60,21 @@ export function addYears(date: Date, years: number): Date {
   return addMonths(date, years * 12)
 }
 
-/** The Sunday on or before `date`, matching the Sunday-start month grid. */
-export function startOfWeek(date: Date): Date {
-  return addDays(date, -date.getDay())
+/**
+ * Day of the week as an offset from Monday (Mon=0 ... Sun=6). Weeks run
+ * Monday-to-Sunday throughout the app, so this is the single place that
+ * re-bases JavaScript's Sunday-first `getDay()` onto that convention.
+ */
+function weekdayIndex(date: Date): number {
+  return (date.getDay() + 6) % 7
 }
 
-/** The seven days of the week containing `date`, Sunday first. */
+/** The Monday on or before `date`, matching the Monday-start month grid. */
+export function startOfWeek(date: Date): Date {
+  return addDays(date, -weekdayIndex(date))
+}
+
+/** The seven days of the week containing `date`, Monday first. */
 export function getWeekDays(date: Date): CalendarDay[] {
   const start = startOfWeek(date)
   return Array.from({ length: 7 }, (_, i) => {
@@ -87,11 +96,11 @@ export function isValidDateId(value: string | null | undefined): value is string
 /**
  * Builds a 6-row x 7-column grid (42 cells) for the given month, including
  * the leading/trailing days from adjacent months needed to fill full weeks.
- * Weeks start on Sunday.
+ * Weeks start on Monday.
  */
 export function getMonthGrid(year: number, month: number): MonthGridDay[] {
   const firstOfMonth = new Date(year, month, 1)
-  const startOffset = firstOfMonth.getDay() // 0 (Sun) - 6 (Sat)
+  const startOffset = weekdayIndex(firstOfMonth) // 0 (Mon) - 6 (Sun)
   const gridStart = new Date(year, month, 1 - startOffset)
 
   return Array.from({ length: 42 }, (_, i) => {
@@ -121,7 +130,7 @@ export function formatFullDate(dateId: string): string {
   })
 }
 
-export const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+export const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 /**
  * Bounds covering the whole 42-cell month grid, including the adjacent-month

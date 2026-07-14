@@ -33,9 +33,21 @@ describe('date utils', () => {
     expect(currentMonthDays[30].dateId).toBe('2026-07-31')
   })
 
-  it('grid weeks start on Sunday', () => {
+  it('grid weeks start on Monday', () => {
     const grid = getMonthGrid(2026, 6)
-    expect(grid[0].date.getDay()).toBe(0)
+    expect(grid[0].date.getDay()).toBe(1)
+    // July 2026 opens on a Wednesday, so the grid backfills to Mon Jun 29.
+    expect(grid[0].dateId).toBe('2026-06-29')
+  })
+
+  it('still covers a 31-day month that opens on a Sunday', () => {
+    // The worst case for a Monday-start grid: a 6-day lead-in plus 31 days
+    // still has to fit inside the fixed 42 cells.
+    const grid = getMonthGrid(2026, 2) // March 2026 opens on a Sunday
+    expect(grid[0].date.getDay()).toBe(1)
+    const marchDays = grid.filter((d) => d.isCurrentMonth)
+    expect(marchDays).toHaveLength(31)
+    expect(marchDays[30].dateId).toBe('2026-03-31')
   })
 })
 
@@ -64,27 +76,33 @@ describe('date arithmetic', () => {
 })
 
 describe('week helpers', () => {
-  it('starts weeks on the Sunday on or before the date', () => {
-    // 2026-07-14 is a Tuesday; its week starts Sunday 2026-07-12.
-    expect(toDateId(startOfWeek(new Date(2026, 6, 14)))).toBe('2026-07-12')
-    // A Sunday is already the start of its own week.
-    expect(toDateId(startOfWeek(new Date(2026, 6, 12)))).toBe('2026-07-12')
+  it('starts weeks on the Monday on or before the date', () => {
+    // 2026-07-14 is a Tuesday; its week starts Monday 2026-07-13.
+    expect(toDateId(startOfWeek(new Date(2026, 6, 14)))).toBe('2026-07-13')
+    // A Monday is already the start of its own week.
+    expect(toDateId(startOfWeek(new Date(2026, 6, 13)))).toBe('2026-07-13')
   })
 
-  it('returns seven consecutive days, Sunday first', () => {
+  it('treats Sunday as the end of the week, not the start of the next one', () => {
+    // Sun 2026-07-12 closes the week that opened on Mon 2026-07-06.
+    expect(toDateId(startOfWeek(new Date(2026, 6, 12)))).toBe('2026-07-06')
+  })
+
+  it('returns seven consecutive days, Monday first', () => {
     const days = getWeekDays(new Date(2026, 6, 14))
     expect(days).toHaveLength(7)
-    expect(days[0].dateId).toBe('2026-07-12')
-    expect(days[6].dateId).toBe('2026-07-18')
-    expect(days[0].date.getDay()).toBe(0)
+    expect(days[0].dateId).toBe('2026-07-13')
+    expect(days[6].dateId).toBe('2026-07-19')
+    expect(days[0].date.getDay()).toBe(1) // Monday
+    expect(days[6].date.getDay()).toBe(0) // Sunday
   })
 
   it('bounds a week spanning a month boundary', () => {
-    expect(getWeekDateIdBounds(new Date(2026, 6, 1))).toEqual(['2026-06-28', '2026-07-04'])
+    expect(getWeekDateIdBounds(new Date(2026, 6, 1))).toEqual(['2026-06-29', '2026-07-05'])
   })
 
   it('labels a week, collapsing whatever the two ends share', () => {
-    expect(formatWeekLabel(new Date(2026, 6, 14))).toBe('12 – 18 July 2026')
+    expect(formatWeekLabel(new Date(2026, 6, 14))).toBe('13 – 19 July 2026')
     // Spanning two months, and two years, keeps both ends qualified.
     expect(formatWeekLabel(new Date(2026, 6, 1))).toMatch(/Jun.*–.*Jul.*2026/)
     expect(formatWeekLabel(new Date(2025, 11, 31))).toMatch(/2025.*–.*2026/)
