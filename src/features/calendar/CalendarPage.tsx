@@ -39,7 +39,7 @@ export function CalendarPage() {
   }
 
   return (
-    <div className="safe-top mx-auto max-w-lg px-4 pt-6">
+    <div className="safe-top mx-auto max-w-2xl px-4 pt-6">
       <header className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold text-ink-primary">{formatMonthLabel(year, month)}</h1>
         <div className="flex items-center gap-1">
