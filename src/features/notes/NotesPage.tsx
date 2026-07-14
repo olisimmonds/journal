@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   DndContext,
@@ -11,8 +12,8 @@ import {
 import {
   SortableContext,
   arrayMove,
+  rectSortingStrategy,
   sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { createNote, listNotes, reorderNotes } from '../../db/notes.repo'
 import { Button } from '../../components/Button'
@@ -20,10 +21,14 @@ import { EmptyState } from '../../components/EmptyState'
 import { PlusIcon } from '../../components/icons'
 import { triggerSync } from '../../sync/triggerSync'
 import { NoteCard } from './NoteCard'
+import { NoteEditor } from './NoteEditor'
 
-/** Persistent notes tab, independent of the calendar. Supports drag-to-reorder. */
+/** Persistent notes tab, independent of the calendar. Shows notes as a
+ *  Google Keep-style grid of preview tiles; tapping one opens a fullscreen
+ *  editor. Supports drag-to-reorder within the grid. */
 export function NotesPage() {
   const notes = useLiveQuery(() => listNotes(), [])
+  const [openNoteId, setOpenNoteId] = useState<string | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -44,12 +49,15 @@ export function NotesPage() {
   }
 
   const handleCreateNote = async () => {
-    await createNote()
+    const note = await createNote()
     triggerSync()
+    setOpenNoteId(note.id)
   }
 
+  const openNote = notes?.find((n) => n.id === openNoteId)
+
   return (
-    <div className="safe-top mx-auto max-w-lg px-4 pt-6">
+    <div className="safe-top mx-auto max-w-3xl px-4 pt-6">
       <header className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold text-ink-primary">Notes</h1>
         <Button variant="ghost" onClick={handleCreateNote} aria-label="New note">
@@ -69,15 +77,17 @@ export function NotesPage() {
         />
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={notes.map((n) => n.id)} strategy={verticalListSortingStrategy}>
-            <div className="flex flex-col gap-3 pb-10 animate-fade-in">
+          <SortableContext items={notes.map((n) => n.id)} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-2 gap-3 pb-10 animate-fade-in sm:grid-cols-3 md:grid-cols-4">
               {notes.map((note) => (
-                <NoteCard key={note.id} note={note} />
+                <NoteCard key={note.id} note={note} onOpen={() => setOpenNoteId(note.id)} />
               ))}
             </div>
           </SortableContext>
         </DndContext>
       )}
+
+      {openNote && <NoteEditor note={openNote} onClose={() => setOpenNoteId(null)} />}
     </div>
   )
 }

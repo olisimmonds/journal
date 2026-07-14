@@ -80,6 +80,14 @@ export function signOutOfGoogleDrive(): void {
   cachedAccessToken = null
   lastAuthFailure = null
   localStorage.removeItem(HAS_GRANTED_STORAGE_KEY)
+  clearScheduledRefresh()
+}
+
+/** Error thrown for failures in the token-acquisition flow itself (as
+ *  opposed to network/Drive API errors once a token was already obtained),
+ *  so callers can offer a "Reconnect" action instead of a generic retry. */
+export class DriveAuthError extends Error {
+  readonly isAuthError = true
 }
 
 // Sync is triggered from several places in quick succession (autosave, image
@@ -135,7 +143,7 @@ export async function requestDriveAccessToken(): Promise<string> {
     })
     .catch((err: unknown) => {
       lastAuthFailure = {
-        error: err instanceof Error ? err : new Error('Google sign-in failed.'),
+        error: err instanceof Error ? err : new DriveAuthError('Google sign-in failed.'),
         failedAt: Date.now(),
       }
       throw err
@@ -146,6 +154,19 @@ export async function requestDriveAccessToken(): Promise<string> {
   return pendingTokenRequest
 }
 
+/** Forces the interactive consent popup, skipping the silent attempt and
+ *  the failure cooldown. Only call this from a user gesture (e.g. a
+ *  "Reconnect" button click) — browsers block popups opened without one. */
+export async function reconnectGoogleDrive(): Promise<string> {
+  await loadGisScript()
+  const clientId = getClientId()
+  const token = await requestTokenWithPrompt(clientId, 'consent')
+  lastAuthFailure = null
+  return token
+}
+
+const SILENT_RETRY_DELAY_MS = 1_500
+
 async function requestNewAccessToken(): Promise<string> {
   await loadGisScript()
   const clientId = getClientId()
@@ -154,7 +175,15 @@ async function requestNewAccessToken(): Promise<string> {
     try {
       return await requestTokenWithPrompt(clientId, '')
     } catch {
-      // Silent renewal failed — fall through to an interactive prompt.
+      // The silent iframe occasionally loses a race on first load or hits a
+      // transient network blip rather than a genuinely revoked/blocked
+      // grant — one quick retry avoids escalating those to a visible popup.
+      await new Promise((resolve) => setTimeout(resolve, SILENT_RETRY_DELAY_MS))
+      try {
+        return await requestTokenWithPrompt(clientId, '')
+      } catch {
+        // Still failing — fall through to an interactive prompt.
+      }
     }
   }
 
@@ -168,7 +197,9 @@ function requestTokenWithPrompt(clientId: string, prompt: string): Promise<strin
       scope: DRIVE_FILE_SCOPE,
       callback: (response) => {
         if (response.error || !response.access_token) {
-          reject(new Error(response.error ?? 'Google sign-in did not return an access token.'))
+          reject(
+            new DriveAuthError(response.error ?? 'Google sign-in did not return an access token.'),
+          )
           return
         }
         // Google access tokens for this flow are valid for 1 hour; refresh
@@ -178,13 +209,62 @@ function requestTokenWithPrompt(clientId: string, prompt: string): Promise<strin
           expiresAt: Date.now() + 55 * 60 * 1000,
         }
         localStorage.setItem(HAS_GRANTED_STORAGE_KEY, 'true')
+        scheduleProactiveRefresh()
         resolve(response.access_token)
       },
       error_callback: (error) => {
-        reject(new Error(`Google sign-in failed: ${error.type}`))
+        reject(new DriveAuthError(`Google sign-in failed: ${error.type}`))
       },
     })
 
     tokenClient.requestAccessToken({ prompt })
+  })
+}
+
+// Keeps the cached token warm during a long-open session so an in-progress
+// visit never hits the ~55 min mark and has to silently (or interactively)
+// re-authenticate mid-action. Only runs once a grant already exists on this
+// browser — never opens a popup on its own.
+let scheduledRefreshTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearScheduledRefresh(): void {
+  if (scheduledRefreshTimer) {
+    clearTimeout(scheduledRefreshTimer)
+    scheduledRefreshTimer = null
+  }
+}
+
+function scheduleProactiveRefresh(): void {
+  clearScheduledRefresh()
+  if (!cachedAccessToken) return
+
+  const REFRESH_MARGIN_MS = 5 * 60 * 1000
+  const delay = Math.max(cachedAccessToken.expiresAt - Date.now() - REFRESH_MARGIN_MS, 0)
+
+  scheduledRefreshTimer = setTimeout(() => {
+    requestDriveAccessToken().catch(() => {
+      // Surfaces to the user the next time something actually needs to
+      // sync; a background keep-alive failure alone shouldn't interrupt.
+    })
+  }, delay)
+}
+
+let proactiveRefreshInitialized = false
+
+/** Call once on app start. Re-arms the silent refresh when the tab regains
+ *  visibility if the cached token has since gone stale (e.g. the laptop was
+ *  asleep past expiry), so returning to the app doesn't surprise the user
+ *  with a popup on their next action. */
+export function initProactiveDriveRefresh(): void {
+  if (proactiveRefreshInitialized) return
+  proactiveRefreshInitialized = true
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return
+    if (!hasGrantedBefore()) return
+    if (getCachedAccessToken()) return
+    requestDriveAccessToken().catch(() => {
+      // Same as above — real failures surface via the next real sync.
+    })
   })
 }

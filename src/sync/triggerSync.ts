@@ -18,6 +18,14 @@ import { setSyncError } from './syncBus'
 let syncInFlight: Promise<void> | null = null
 let syncQueued = false
 
+// While a sync is failing, keep retrying in the background even if the user
+// isn't actively editing anything — otherwise a dismissed banner combined
+// with a quiet reading session would leave sync silently broken with no
+// further signal. This is what makes failures "shout loudly": the banner
+// keeps reappearing until a sync actually succeeds.
+const RETRY_INTERVAL_MS = 5 * 60 * 1000
+let retryTimer: ReturnType<typeof setTimeout> | null = null
+
 export function triggerSync(): void {
   if (syncInFlight) {
     syncQueued = true
@@ -33,10 +41,31 @@ async function runSyncUntilQuiet(): Promise<void> {
     try {
       await syncWithGoogleDrive()
       setSyncError(null)
+      clearRetryTimer()
     } catch (err: unknown) {
-      setSyncError(err instanceof Error ? err.message : 'Google Drive sync failed.')
+      const isAuthError = err instanceof Error && 'isAuthError' in err && err.isAuthError === true
+      setSyncError({
+        message: err instanceof Error ? err.message : 'Google Drive sync failed.',
+        isAuthError,
+      })
+      scheduleRetry()
     }
   } while (syncQueued)
 
   syncInFlight = null
+}
+
+function clearRetryTimer(): void {
+  if (retryTimer) {
+    clearTimeout(retryTimer)
+    retryTimer = null
+  }
+}
+
+function scheduleRetry(): void {
+  if (retryTimer) return
+  retryTimer = setTimeout(() => {
+    retryTimer = null
+    triggerSync()
+  }, RETRY_INTERVAL_MS)
 }
