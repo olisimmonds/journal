@@ -51,13 +51,15 @@ export default defineConfig({
         // precache the built app shell so the UI itself works offline.
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         navigateFallback: `${base}index.html`,
-        // Google's OAuth redirect appends ?code=...&state=... to this URL,
-        // which never exactly matches the plain precached entry — without
-        // this denylist, the SPA fallback above intercepts it and serves
-        // the full app instead of the tiny standalone callback page,
-        // silently breaking the "Connect to Google Drive" flow (the popup
-        // never posts back to the opener or closes itself).
-        navigateFallbackDenylist: [/oauth-callback\.html$/],
+        // Google's OAuth redirect appends ?code=...&state=... to this URL.
+        // Workbox tests this denylist against `pathname + search` combined,
+        // so an anchored `...html$` pattern (matching only the bare file
+        // with no query string) silently fails to match the real redirect
+        // and the SPA fallback below still intercepts it, serving the full
+        // app instead of the tiny standalone callback page — breaking the
+        // "Connect to Google Drive" flow (the popup never posts back to the
+        // opener or closes itself). No `$` anchor here, deliberately.
+        navigateFallbackDenylist: [/\/oauth-callback\.html/],
       },
     }),
   ],

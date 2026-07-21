@@ -14,6 +14,12 @@ const DRIVE_FILES_ENDPOINT = 'https://www.googleapis.com/drive/v3/files'
 const DRIVE_UPLOAD_ENDPOINT = 'https://www.googleapis.com/upload/drive/v3/files'
 const BACKUP_FILE_NAME = 'journal-backup.json'
 
+/** Prefix for periodic snapshot files (see maybeCreateWeeklySnapshot in
+ *  syncManager.ts) — distinct from `BACKUP_FILE_NAME` (no trailing `.json`
+ *  directly after "backup") so a Drive search for one never matches the
+ *  other. */
+export const SNAPSHOT_FILE_PREFIX = 'journal-backup-'
+
 async function driveFetch(
   accessToken: string,
   url: string,
@@ -53,6 +59,38 @@ export async function downloadBackupContent(
   return response.text()
 }
 
+function buildMultipartBody(name: string, content: string): { boundary: string; body: string } {
+  const boundary = 'journal-backup-boundary'
+  // No `parents` — Drive defaults to creating the file in the root of "My
+  // Drive", where you can see it directly.
+  const metadata = { name }
+
+  const body = [
+    `--${boundary}`,
+    'Content-Type: application/json; charset=UTF-8',
+    '',
+    JSON.stringify(metadata),
+    `--${boundary}`,
+    'Content-Type: application/json',
+    '',
+    content,
+    `--${boundary}--`,
+  ].join('\r\n')
+
+  return { boundary, body }
+}
+
+async function createFile(accessToken: string, name: string, content: string): Promise<string> {
+  const { boundary, body } = buildMultipartBody(name, content)
+  const response = await driveFetch(accessToken, `${DRIVE_UPLOAD_ENDPOINT}?uploadType=multipart`, {
+    method: 'POST',
+    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body,
+  })
+  const data = (await response.json()) as { id: string }
+  return data.id
+}
+
 /**
  * Creates the backup file on first sync, or overwrites its content on every
  * subsequent sync. Uses Drive's multipart upload so metadata (name, parent
@@ -73,33 +111,39 @@ export async function uploadBackupContent(
     return data.id
   }
 
-  const boundary = 'journal-backup-boundary'
-  // No `parents` — Drive defaults to creating the file in the root of "My
-  // Drive", where you can see it directly.
-  const metadata = { name: BACKUP_FILE_NAME }
+  return createFile(accessToken, BACKUP_FILE_NAME, content)
+}
 
-  const multipartBody = [
-    `--${boundary}`,
-    'Content-Type: application/json; charset=UTF-8',
-    '',
-    JSON.stringify(metadata),
-    `--${boundary}`,
-    'Content-Type: application/json',
-    '',
-    content,
-    `--${boundary}--`,
-  ].join('\r\n')
+/**
+ * Creates a brand-new, never-overwritten file — used for periodic snapshots
+ * (see maybeCreateWeeklySnapshot in syncManager.ts), as opposed to
+ * `uploadBackupContent`'s create-or-update of the single live backup.
+ */
+export async function createSnapshotFile(
+  accessToken: string,
+  name: string,
+  content: string,
+): Promise<string> {
+  return createFile(accessToken, name, content)
+}
 
-  const response = await driveFetch(
-    accessToken,
-    `${DRIVE_UPLOAD_ENDPOINT}?uploadType=multipart`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
-      body: multipartBody,
-    },
-  )
+/** Lists all periodic snapshot files (not the live backup file), oldest
+ *  first by name — snapshot names are `journal-backup-YYYY-MM-DD.json`, so
+ *  a plain string sort is also a chronological sort. */
+export async function listSnapshotFiles(
+  accessToken: string,
+): Promise<Array<{ id: string; name: string }>> {
+  const params = new URLSearchParams({
+    q: `name contains '${SNAPSHOT_FILE_PREFIX}' and trashed = false`,
+    fields: 'files(id, name)',
+  })
 
-  const data = (await response.json()) as { id: string }
-  return data.id
+  const response = await driveFetch(accessToken, `${DRIVE_FILES_ENDPOINT}?${params}`)
+  const data = (await response.json()) as { files: Array<{ id: string; name: string }> }
+
+  return data.files.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export async function deleteFile(accessToken: string, fileId: string): Promise<void> {
+  await driveFetch(accessToken, `${DRIVE_FILES_ENDPOINT}/${fileId}`, { method: 'DELETE' })
 }

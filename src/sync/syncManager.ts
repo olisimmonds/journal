@@ -1,13 +1,50 @@
 import { db } from '../db/schema'
 import { buildBackupData, deserializeImage, type BackupData } from './backupSerializer'
-import { downloadBackupContent, findBackupFileId, uploadBackupContent } from './driveClient'
+import {
+  createSnapshotFile,
+  deleteFile,
+  downloadBackupContent,
+  findBackupFileId,
+  listSnapshotFiles,
+  SNAPSHOT_FILE_PREFIX,
+  uploadBackupContent,
+} from './driveClient'
 import { requestDriveAccessToken, signOutOfGoogleDrive } from './googleAuth'
 
 const LAST_SYNCED_STORAGE_KEY = 'journal.sync.lastSyncedAt'
+const LAST_SNAPSHOT_STORAGE_KEY = 'journal.sync.lastSnapshotAt'
+
+// A safety net independent of the live backup file: if a bad sync (or a
+// mistake on your end) ever overwrites journal-backup.json with something
+// you didn't want, Drive's own revision history for that file isn't
+// guaranteed to still have what you need — Drive prunes old revisions of
+// API-uploaded files after ~30 days. These snapshots are separate,
+// never-overwritten files instead, so they survive regardless of what
+// happens to the live backup or its revision history.
+const SNAPSHOT_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000
+const MAX_SNAPSHOTS = 12
 
 export function getLastSyncedAt(): number | null {
   const raw = localStorage.getItem(LAST_SYNCED_STORAGE_KEY)
   return raw ? Number(raw) : null
+}
+
+/** Writes a new dated snapshot file once a week (and prunes the oldest
+ *  beyond `MAX_SNAPSHOTS`), so old data can still be recovered even if the
+ *  live backup file gets overwritten with something wrong. Best-effort:
+ *  failures here don't fail the overall sync, since the live backup above
+ *  already succeeded. */
+export async function maybeCreateWeeklySnapshot(accessToken: string, content: string): Promise<void> {
+  const lastSnapshotAt = Number(localStorage.getItem(LAST_SNAPSHOT_STORAGE_KEY) ?? 0)
+  if (Date.now() - lastSnapshotAt < SNAPSHOT_INTERVAL_MS) return
+
+  const dateLabel = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+  await createSnapshotFile(accessToken, `${SNAPSHOT_FILE_PREFIX}${dateLabel}.json`, content)
+  localStorage.setItem(LAST_SNAPSHOT_STORAGE_KEY, String(Date.now()))
+
+  const snapshots = await listSnapshotFiles(accessToken)
+  const stale = snapshots.slice(0, Math.max(0, snapshots.length - MAX_SNAPSHOTS))
+  await Promise.all(stale.map((file) => deleteFile(accessToken, file.id)))
 }
 
 export interface SyncResult {
@@ -38,7 +75,16 @@ export async function syncWithGoogleDrive(): Promise<SyncResult> {
   }
 
   const localData = await buildBackupData()
-  await uploadBackupContent(accessToken, fileId, JSON.stringify(localData))
+  const serialized = JSON.stringify(localData)
+  await uploadBackupContent(accessToken, fileId, serialized)
+
+  try {
+    await maybeCreateWeeklySnapshot(accessToken, serialized)
+  } catch (err) {
+    // See maybeCreateWeeklySnapshot's doc comment — this is a best-effort
+    // safety net, not the primary sync path.
+    console.warn('Failed to create/prune a weekly Drive backup snapshot.', err)
+  }
 
   const pushedAt = Date.now()
   localStorage.setItem(LAST_SYNCED_STORAGE_KEY, String(pushedAt))

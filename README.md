@@ -90,6 +90,17 @@ open its own popup. There's also a 30-second cooldown on retrying a *failing* si
 (`AUTH_FAILURE_COOLDOWN_MS`), so a misconfigured client ID or blocked popup doesn't turn into a
 retry storm as you keep typing.
 
+**Weekly snapshots**: on top of the live backup file, `syncManager.ts`'s `maybeCreateWeeklySnapshot`
+writes a separate, never-overwritten dated copy (`journal-backup-YYYY-MM-DD.json`, also a normal
+visible file in your Drive root) roughly once every 7 days, keeping the most recent 12 (~3
+months) and pruning older ones automatically. This exists because Drive's own revision history
+for the live file isn't a reliable enough safety net on its own — a bad sync or an accidental
+overwrite could still be unrecoverable if it went unnoticed past Drive's ~30-day/handful-of-
+revisions retention window for API-updated files. These snapshots are entirely independent of
+that: recovering from one just means opening it in Drive and comparing/restoring it manually,
+since there's no in-app UI for this (deliberately — it's meant to be a rare, manual last resort,
+not another feature surface).
+
 **Offline mode**: `triggerSync()` checks `navigator.onLine` before attempting anything — while
 offline, edits keep autosaving to IndexedDB exactly as normal, but no Drive request (and no
 Google sign-in prompt) is attempted, and a calm banner (`src/components/OfflineBanner.tsx`, not
