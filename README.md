@@ -118,6 +118,12 @@ versions before anything worth restoring happens), keeping the most recent 20 sn
 history is local-only — deliberately not part of `BackupData`/Drive sync — since it's a
 personal-device undo safety net, not data that needs to roam across devices.
 
+Deleting a whole note works the same way in spirit: `src/features/notes/pendingNoteDeletion.ts`
+hides the note immediately but delays the actual deletion by a few seconds, during which
+NotesPage shows an "Undo" snackbar. Only one deletion is ever pending at a time — starting a
+second one finalizes the first immediately, since only one note can realistically be mid-delete
+at once.
+
 **Re-authenticating on the same device**: `googleAuth.ts` uses a direct OAuth Authorization Code
 + PKCE flow, not Google Identity Services' token-client. The first-ever connection (via the
 "Connect" button that appears in the sync banner) opens a Google consent popup and, critically,

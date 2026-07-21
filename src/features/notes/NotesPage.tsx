@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   DndContext,
@@ -22,6 +22,11 @@ import { PlusIcon } from '../../components/icons'
 import { triggerSync } from '../../sync/triggerSync'
 import { NoteCard } from './NoteCard'
 import { NoteEditor } from './NoteEditor'
+import {
+  getPendingNoteDeletionId,
+  subscribePendingNoteDeletion,
+  undoNoteDeletion,
+} from './pendingNoteDeletion'
 
 /** Persistent notes tab, independent of the calendar. Shows notes as a
  *  Google Keep-style grid of preview tiles; tapping one opens a fullscreen
@@ -29,6 +34,12 @@ import { NoteEditor } from './NoteEditor'
 export function NotesPage() {
   const notes = useLiveQuery(() => listNotes(), [])
   const [openNoteId, setOpenNoteId] = useState<string | null>(null)
+  const pendingDeleteId = useSyncExternalStore(subscribePendingNoteDeletion, getPendingNoteDeletionId)
+
+  // A note being deleted is hidden immediately (optimistically), even
+  // though its actual removal from IndexedDB is delayed a few seconds to
+  // allow "Undo" — see pendingNoteDeletion.ts.
+  const visibleNotes = notes?.filter((note) => note.id !== pendingDeleteId)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -37,13 +48,13 @@ export function NotesPage() {
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
-    if (!notes || !over || active.id === over.id) return
+    if (!visibleNotes || !over || active.id === over.id) return
 
-    const oldIndex = notes.findIndex((n) => n.id === active.id)
-    const newIndex = notes.findIndex((n) => n.id === over.id)
+    const oldIndex = visibleNotes.findIndex((n) => n.id === active.id)
+    const newIndex = visibleNotes.findIndex((n) => n.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
 
-    const reordered = arrayMove(notes, oldIndex, newIndex)
+    const reordered = arrayMove(visibleNotes, oldIndex, newIndex)
     await reorderNotes(reordered.map((n) => n.id))
     triggerSync()
   }
@@ -65,7 +76,7 @@ export function NotesPage() {
         </Button>
       </header>
 
-      {notes === undefined ? null : notes.length === 0 ? (
+      {visibleNotes === undefined ? null : visibleNotes.length === 0 ? (
         <EmptyState
           title="No notes yet"
           description="Notes are separate from your calendar journal and stick around until you delete them."
@@ -77,9 +88,9 @@ export function NotesPage() {
         />
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={notes.map((n) => n.id)} strategy={rectSortingStrategy}>
+          <SortableContext items={visibleNotes.map((n) => n.id)} strategy={rectSortingStrategy}>
             <div className="grid grid-cols-2 gap-3 pb-10 animate-fade-in sm:grid-cols-3 md:grid-cols-4">
-              {notes.map((note) => (
+              {visibleNotes.map((note) => (
                 <NoteCard key={note.id} note={note} onOpen={() => setOpenNoteId(note.id)} />
               ))}
             </div>
@@ -88,6 +99,21 @@ export function NotesPage() {
       )}
 
       {openNote && <NoteEditor note={openNote} onClose={() => setOpenNoteId(null)} />}
+
+      {pendingDeleteId && (
+        <div className="safe-bottom fixed inset-x-0 bottom-20 z-40 flex justify-center px-4">
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-surface-2 px-4 py-3 text-sm text-ink-primary shadow-lg animate-fade-in">
+            <span>Note deleted.</span>
+            <button
+              type="button"
+              onClick={() => undoNoteDeletion(pendingDeleteId)}
+              className="font-medium underline"
+            >
+              Undo
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

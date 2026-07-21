@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ChecklistItem, Note } from '../../db/types'
-import { deleteNote, updateNote } from '../../db/notes.repo'
+import { updateNote } from '../../db/notes.repo'
 import { useAutosave } from '../entry/useAutosave'
 import { ChevronLeftIcon, HistoryIcon, TrashIcon } from '../../components/icons'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { triggerSync } from '../../sync/triggerSync'
 import { ChecklistEditor } from './ChecklistEditor'
 import { NoteHistoryModal } from './NoteHistoryModal'
+import { scheduleNoteDeletion } from './pendingNoteDeletion'
 
 interface NoteEditorProps {
   note: Note
@@ -102,14 +103,13 @@ export function NoteEditor({ note, onClose }: NoteEditorProps) {
       <ConfirmDialog
         open={confirmDelete}
         title="Delete this note?"
-        description="This cannot be undone."
+        description="You'll be able to undo this for a few seconds after."
         confirmLabel="Delete"
         destructive
         onCancel={() => setConfirmDelete(false)}
-        onConfirm={async () => {
-          await deleteNote(note.id)
+        onConfirm={() => {
+          scheduleNoteDeletion(note.id)
           setConfirmDelete(false)
-          triggerSync()
           onClose()
         }}
       />
