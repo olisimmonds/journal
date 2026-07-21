@@ -51,6 +51,13 @@ export default defineConfig({
         // precache the built app shell so the UI itself works offline.
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         navigateFallback: `${base}index.html`,
+        // Google's OAuth redirect appends ?code=...&state=... to this URL,
+        // which never exactly matches the plain precached entry — without
+        // this denylist, the SPA fallback above intercepts it and serves
+        // the full app instead of the tiny standalone callback page,
+        // silently breaking the "Connect to Google Drive" flow (the popup
+        // never posts back to the opener or closes itself).
+        navigateFallbackDenylist: [/oauth-callback\.html$/],
       },
     }),
   ],
