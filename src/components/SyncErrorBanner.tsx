@@ -24,8 +24,18 @@ export function SyncErrorBanner() {
     }
   }
 
+  // A never-connected state isn't really an "error" — it's just the app not
+  // yet having permission to back up. Use a neutral tone for that case and
+  // reserve red for an actual failure (a revoked/broken connection, a
+  // network or Drive API error).
+  const isNeutral = error.neverConnected
+
   return (
-    <div className="safe-top fixed inset-x-0 top-0 z-50 flex items-start gap-3 bg-danger px-4 py-3 text-sm text-white">
+    <div
+      className={`safe-top fixed inset-x-0 top-0 z-50 flex items-start gap-3 px-4 py-3 text-sm ${
+        isNeutral ? 'bg-surface-2 text-ink-primary' : 'bg-danger text-white'
+      }`}
+    >
       <span className="flex-1">{error.message}</span>
       {error.isAuthError && (
         <button
@@ -34,7 +44,7 @@ export function SyncErrorBanner() {
           disabled={reconnecting}
           className="shrink-0 font-medium underline disabled:opacity-60"
         >
-          {reconnecting ? 'Reconnecting…' : 'Reconnect'}
+          {reconnecting ? 'Connecting…' : error.neverConnected ? 'Connect' : 'Reconnect'}
         </button>
       )}
       <button

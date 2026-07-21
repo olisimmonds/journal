@@ -3,10 +3,11 @@ import { createPortal } from 'react-dom'
 import type { ChecklistItem, Note } from '../../db/types'
 import { deleteNote, updateNote } from '../../db/notes.repo'
 import { useAutosave } from '../entry/useAutosave'
-import { ChevronLeftIcon, TrashIcon } from '../../components/icons'
+import { ChevronLeftIcon, HistoryIcon, TrashIcon } from '../../components/icons'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { triggerSync } from '../../sync/triggerSync'
 import { ChecklistEditor } from './ChecklistEditor'
+import { NoteHistoryModal } from './NoteHistoryModal'
 
 interface NoteEditorProps {
   note: Note
@@ -21,6 +22,7 @@ export function NoteEditor({ note, onClose }: NoteEditorProps) {
   const [body, setBody] = useState(note.body)
   const [checklist, setChecklist] = useState<ChecklistItem[]>(note.checklist)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
 
   useAutosave({ title, body, checklist }, async (value) => {
     await updateNote(note.id, value)
@@ -46,14 +48,24 @@ export function NoteEditor({ note, onClose }: NoteEditorProps) {
         >
           <ChevronLeftIcon width={20} height={20} />
         </button>
-        <button
-          type="button"
-          onClick={() => setConfirmDelete(true)}
-          aria-label="Delete note"
-          className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-ink-tertiary transition-colors duration-150 hover:bg-surface-2 hover:text-danger"
-        >
-          <TrashIcon width={18} height={18} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setShowHistory(true)}
+            aria-label="Version history"
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-ink-tertiary transition-colors duration-150 hover:bg-surface-2 hover:text-ink-primary"
+          >
+            <HistoryIcon width={18} height={18} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            aria-label="Delete note"
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-ink-tertiary transition-colors duration-150 hover:bg-surface-2 hover:text-danger"
+          >
+            <TrashIcon width={18} height={18} />
+          </button>
+        </div>
       </header>
 
       <div className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
@@ -75,6 +87,17 @@ export function NoteEditor({ note, onClose }: NoteEditorProps) {
 
         <ChecklistEditor items={checklist} onChange={setChecklist} />
       </div>
+
+      <NoteHistoryModal
+        open={showHistory}
+        noteId={note.id}
+        onClose={() => setShowHistory(false)}
+        onRestored={(version) => {
+          setTitle(version.title)
+          setBody(version.body)
+          setChecklist(version.checklist)
+        }}
+      />
 
       <ConfirmDialog
         open={confirmDelete}

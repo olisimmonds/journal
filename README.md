@@ -12,7 +12,8 @@ Android, and desktop, and works fully offline.
 - **Calendar journal** — monthly view, today highlighted, days with entries marked and their
   title shown directly on the day cell, unlimited text, inline images, autosave, full-text
   search.
-- **Notes** — separate from the calendar, unlimited notes, checklists, drag-to-reorder, autosave.
+- **Notes** — separate from the calendar, unlimited notes, checklists, drag-to-reorder, autosave,
+  version history (undo an accidental edit or full deletion of a note's text).
 - **Privacy** — all data lives in IndexedDB on your device. Cloud backup is a single, visible
   JSON file (`journal-backup.json`) in the root of your own Google Drive — you can open it,
   download it, or inspect it any time. The app can only ever see files it created itself, never
@@ -89,15 +90,43 @@ open its own popup. There's also a 30-second cooldown on retrying a *failing* si
 (`AUTH_FAILURE_COOLDOWN_MS`), so a misconfigured client ID or blocked popup doesn't turn into a
 retry storm as you keep typing.
 
-**Re-authenticating on the same device**: Google's access tokens for this flow expire after
-about an hour. Once you've granted access once on a given browser, `googleAuth.ts` remembers
-that (a flag in `localStorage`, not the token itself) and tries a **silent** renewal first
-(`prompt: ''`) — if your Google session is still active, this reissues a token with no popup and
-no visible interruption at all. It only falls back to the interactive consent popup if the
-silent attempt fails (revoked access, cleared cookies, or a genuinely new browser/device). There
-is no persistent refresh-token flow — that would need a backend to hold a client secret safely,
-which this static, no-server app deliberately doesn't have — so an interactive prompt can still
-occasionally resurface, just far less often than every hour.
+**Offline mode**: `triggerSync()` checks `navigator.onLine` before attempting anything — while
+offline, edits keep autosaving to IndexedDB exactly as normal, but no Drive request (and no
+Google sign-in prompt) is attempted, and a calm banner (`src/components/OfflineBanner.tsx`, not
+the red error one) says so. `useBackgroundSync`'s `online` event listener fires a catch-up sync
+the moment connectivity returns, so nothing needs to be manually retried or queued.
+
+### Note version history
+
+Every note keeps a short local history of its own past content
+(`src/db/notes.repo.ts`: `noteVersions` table), so an accidental edit — or selecting all the text
+in a note and deleting it — can be undone from the note editor's history icon. A snapshot of a
+note's *previous* state is taken before each write, throttled to at most once a minute per note
+(so a normal editing session with autosave firing every ~600ms doesn't burn through the kept
+versions before anything worth restoring happens), keeping the most recent 20 snapshots. This
+history is local-only — deliberately not part of `BackupData`/Drive sync — since it's a
+personal-device undo safety net, not data that needs to roam across devices.
+
+**Re-authenticating on the same device**: `googleAuth.ts` uses a direct OAuth Authorization Code
++ PKCE flow, not Google Identity Services' token-client. The first-ever connection (via the
+"Connect" button that appears in the sync banner) opens a Google consent popup and, critically,
+receives a genuine **refresh token**, stored locally in IndexedDB (`db.authTokens`, never synced
+to Drive). Every subsequent access token — including the hourly renewal — is minted silently from
+that refresh token via a plain `fetch` to Google's token endpoint, with no popup and no iframe.
+Unlike the old silent-iframe renewal, this isn't affected by browsers blocking third-party
+cookies (a real problem for iOS PWAs specifically), so it works the same everywhere. The
+interactive popup should only ever be needed once — or again later if you explicitly disconnect,
+or revoke the app's access from your Google Account's
+[Third-party access settings](https://myaccount.google.com/permissions).
+
+This flow needs a client secret, which — unusually for a browser app — is deliberately shipped in
+the client bundle (`VITE_GOOGLE_CLIENT_SECRET`), since there's no backend to hold it out of
+reach. See **Data & privacy** below for why that trade-off is acceptable here.
+
+Because opening the consent popup requires a genuine user click (browsers block popups opened
+from a `setTimeout`/background callback), the very first connection is **not** automatic the way
+sync itself is — the sync banner shows a "Connect" button the first time (and "Reconnect" if a
+working connection later breaks), and that's the only manual step in the whole app.
 
 ## Getting started
 
@@ -118,20 +147,35 @@ cp .env.example .env
 1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a new project
    (or reuse one).
 2. **APIs & Services → Library** — enable the **Google Drive API**.
-3. **APIs & Services → OAuth consent screen** — configure it as **External**, keep it in
-   **Testing** mode (fine for personal use; add your own Google account under "Test users").
-   Publishing/verification is only required if you want *other* people to sign in.
+3. **APIs & Services → OAuth consent screen**:
+   - Configure it as **External**, add your own Google account under **Test users** first so you
+     can try the flow before publishing.
+   - **Publish the app** (button near the top of the consent screen page — moves it from
+     "Testing" to "In production"). This step matters more than it looks: Google expires refresh
+     tokens after 7 days for apps left in **Testing** status, which would silently bring back the
+     "sign in every so often" problem this setup is meant to fix. Publishing removes that limit.
+   - Because the app stays unverified (verification is only required for apps with many users),
+     Google shows a one-time **"Google hasn't verified this app"** warning during sign-in — click
+     **Advanced → Go to (your app name) (unsafe)** to proceed. This is expected and safe for an
+     app only you use; it's a warning about scale of trust, not a sign anything is actually wrong.
 4. **APIs & Services → Credentials → Create Credentials → OAuth client ID**:
    - Application type: **Web application**.
    - Authorized JavaScript origins: add `http://localhost:5173` for local dev, plus your
      production URL once deployed.
-5. Copy the generated **Client ID** into `.env`:
+   - **Authorized redirect URIs** — add the exact same origins with `oauth-callback.html`
+     appended: `http://localhost:5173/oauth-callback.html` for local dev, and
+     `https://<your-production-url>/oauth-callback.html` (include the repo subpath if using
+     GitHub Pages, e.g. `https://<user>.github.io/journal/oauth-callback.html`). This must match
+     exactly — Google rejects any mismatch, including trailing slashes.
+5. Copy the generated **Client ID** and **Client secret** into `.env`:
    ```
    VITE_GOOGLE_CLIENT_ID=xxxxxxxxxx.apps.googleusercontent.com
+   VITE_GOOGLE_CLIENT_SECRET=xxxxxxxxxx
    ```
-   This is an OAuth client ID, not a secret — it's safe to ship in the client bundle and is
-   validated by Google against your configured origins. **No API key or client secret is
-   required** for this flow.
+   The client ID is not sensitive. The client secret normally would be — but this app embeds it
+   in the client bundle anyway so it can obtain a real refresh token without a backend server to
+   hold it safely. See **Data & privacy** below for why that's an acceptable trade-off here, and
+   only here (a single-user app with the narrow `drive.file` scope).
 
 ### Run
 
@@ -215,18 +259,30 @@ only makes sense because of how the pieces fit together:
   the root of your own Google Drive — a normal, visible file you can open, download, or move at
   any time. The OAuth scope (`drive.file`) means the app can only ever read or write files it
   created itself; it has no access to any other file in your Drive.
-- Google sign-in uses the `drive.file` OAuth scope via Google Identity Services. The only
-  credential involved is a public **OAuth client ID** (`VITE_GOOGLE_CLIENT_ID`) — not a secret.
-  It's meant to ship inside the client bundle and is validated by Google against the app's
-  registered origins, not by being kept hidden. There is no client secret, API key, or password
-  anywhere in this app or its config.
-- **Repository safety**: because there's no client secret or personal data of any kind in the
-  source, this repo is safe to keep public, clone, or fork as-is. `.env` (your own client ID) is
-  git-ignored; `.env.example` documents the one env var needed and explains why it's not
-  sensitive. Anyone who clones the repo gets working *code*, not access to *your* data — they'd
-  still need their own Google Cloud OAuth client and their own Google account to run it, and
-  the `drive.file` scope means even a malicious clone using your client ID could never read
-  anything in your Drive except the one file this app itself wrote.
+- Google sign-in uses the `drive.file` OAuth scope via a direct Authorization Code + PKCE flow
+  (`src/sync/googleAuth.ts`). Unlike a typical setup, this app **does** embed an OAuth **client
+  secret** (`VITE_GOOGLE_CLIENT_SECRET`) in the client bundle — normally a serious mistake, since
+  anyone could extract it from the built JS. It's a deliberate, informed trade-off here, not an
+  oversight:
+  - The only thing the secret (plus a stolen refresh token) could ever do is read/write the one
+    `journal-backup.json` file this app created — the `drive.file` scope makes the rest of your
+    Drive permanently inaccessible to it, regardless of who holds the secret.
+  - This app has exactly one real user (you). There's no multi-tenant blast radius — someone
+    extracting the secret from the public repo still needs *your* refresh token (which never
+    leaves your own device's IndexedDB) to do anything with it.
+  - The alternative — a backend service to hold the secret — means paying for and maintaining a
+    server for a single-user hobby app, which is a worse trade for this project than accepting the
+    limited exposure above.
+  - If this reasoning stops applying to you (multiple people relying on the same Drive data, or a
+    scope broader than `drive.file`), don't reuse this pattern — put the secret behind a real
+    backend instead (see the alternative in the auth conversation this was built from, or search
+    "OAuth backend-for-frontend").
+- **Repository safety**: `.env` (your client ID *and* client secret) is git-ignored;
+  `.env.example` documents both variables and explains this trade-off. Anyone who clones the repo
+  gets working *code*, not access to *your* data or *your* Google account — they'd need their own
+  Google Cloud OAuth client (with its own secret) to run it at all, and even someone who obtained
+  your specific secret would still need your refresh token (device-local, never committed or
+  synced) to touch anything, and even then only the one file this app created.
 - The actual boundary protecting your data is your Google account login itself, not anything in
   this codebase — if that's an acceptable trade-off for you (skipping a passphrase in exchange
   for trusting your Google account's own security), this setup requires nothing further.
@@ -242,10 +298,14 @@ only makes sense because of how the pieces fit together:
   a plain visible JSON file (`journal-backup.json` in the root of your Drive) you can already
   open or download directly with no in-app feature needed. The `BackupData` shape is defined in
   `src/sync/backupSerializer.ts` if you want to script something against it.
-- No persistent refresh-token flow, since that needs a backend to hold a client secret safely.
-  Access tokens are renewed silently where possible (see **Sync model** above), but an
-  interactive Google sign-in prompt can still resurface occasionally, particularly on a new
-  browser/device or after clearing cookies.
+- The interactive Google consent popup requires a real user click, so the very first connection
+  (or reconnecting after an explicit disconnect/revoke) can't happen automatically the way sync
+  itself does — it's the one manual step in the app, via the "Connect" button in the sync banner.
+- On iOS, opening the consent popup from an installed home-screen PWA can be less reliable than
+  from a normal Safari tab (iOS sometimes routes `window.open` to a separate Safari instance,
+  which can affect the popup-closes-itself handshake). If the "Connect" button seems stuck, try
+  it from a regular browser tab first, then use the installed app afterwards — reconnecting is a
+  rare event either way.
 - No automated end-to-end browser test suite yet (unit/integration tests cover the data and
   sync-merge logic — see `npm test`).
 

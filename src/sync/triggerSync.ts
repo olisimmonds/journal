@@ -1,3 +1,4 @@
+import { DriveAuthError } from './googleAuth'
 import { syncWithGoogleDrive } from './syncManager'
 import { setSyncError } from './syncBus'
 
@@ -27,6 +28,22 @@ const RETRY_INTERVAL_MS = 5 * 60 * 1000
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 
 export function triggerSync(): void {
+  // Every edit still saves locally to IndexedDB regardless — this only
+  // skips the Drive round-trip. `useBackgroundSync`'s `online` listener
+  // re-triggers a sync as soon as connectivity returns, so nothing needs to
+  // be queued here; retrying against a connection we already know is down
+  // would just produce a scary "Failed to fetch" in the error banner for a
+  // perfectly expected state (see OfflineBanner for how that's surfaced
+  // instead).
+  if (!navigator.onLine) {
+    // OfflineBanner already communicates this state calmly — an existing
+    // red error banner (e.g. from a failure right before connectivity
+    // dropped) would otherwise linger alongside it and read as two
+    // conflicting messages.
+    setSyncError(null)
+    return
+  }
+
   if (syncInFlight) {
     syncQueued = true
     return
@@ -38,15 +55,25 @@ export function triggerSync(): void {
 async function runSyncUntilQuiet(): Promise<void> {
   do {
     syncQueued = false
+    if (!navigator.onLine) {
+      clearRetryTimer()
+      break
+    }
     try {
       await syncWithGoogleDrive()
       setSyncError(null)
       clearRetryTimer()
     } catch (err: unknown) {
-      const isAuthError = err instanceof Error && 'isAuthError' in err && err.isAuthError === true
+      if (!navigator.onLine) {
+        // Connectivity dropped mid-request — expected, not a real failure.
+        clearRetryTimer()
+        break
+      }
+      const isAuthError = err instanceof DriveAuthError
       setSyncError({
         message: err instanceof Error ? err.message : 'Google Drive sync failed.',
         isAuthError,
+        neverConnected: isAuthError && err.neverConnected,
       })
       scheduleRetry()
     }

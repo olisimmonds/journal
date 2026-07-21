@@ -52,3 +52,29 @@ export interface Note {
   createdAt: number
   updatedAt: number
 }
+
+/**
+ * A past snapshot of a note's content, kept so an accidental edit or
+ * deletion of a note's text can be undone. Local-only — not part of the
+ * Drive backup (see src/db/notes.repo.ts).
+ */
+export interface NoteVersion {
+  id: string
+  noteId: string
+  title: string
+  body: string
+  checklist: ChecklistItem[]
+  savedAt: number
+}
+
+/**
+ * The Google Drive OAuth refresh token, kept locally so the app can mint
+ * fresh access tokens indefinitely without repeated interactive sign-in.
+ * A single row (id is always `'google'`). Local-only — never part of the
+ * Drive backup itself. See src/sync/googleAuth.ts.
+ */
+export interface StoredGoogleAuth {
+  id: 'google'
+  refreshToken: string
+  updatedAt: number
+}

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Connecting to Google Drive…</title>
+  </head>
+  <body style="font-family: sans-serif; background: #0a0a0a; color: #e5e5e5">
+    <p>Connecting to Google Drive… you can close this window.</p>
+    <script>
+      // Deliberately plain HTML/JS, not part of the React app — this page
+      // exists only as the OAuth redirect target. It hands the auth result
+      // back to the window that opened it (the main app) and closes itself.
+      // See src/sync/googleAuth.ts for the flow this completes.
+      var params = new URLSearchParams(window.location.search)
+      if (window.opener) {
+        window.opener.postMessage(
+          {
+            type: 'journal-oauth-callback',
+            code: params.get('code'),
+            state: params.get('state'),
+            error: params.get('error'),
+          },
+          window.location.origin,
+        )
+      }
+      window.close()
+    </script>
+  </body>
+</html>

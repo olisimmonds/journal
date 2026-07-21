@@ -122,6 +122,6 @@ export async function mergeRemoteIntoLocal(
   return { mergedEntries, mergedNotes }
 }
 
-export function disconnectGoogleDrive(): void {
-  signOutOfGoogleDrive()
+export async function disconnectGoogleDrive(): Promise<void> {
+  await signOutOfGoogleDrive()
 }

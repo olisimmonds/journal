@@ -1,5 +1,6 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { BottomNav } from './components/BottomNav'
+import { OfflineBanner } from './components/OfflineBanner'
 import { SyncErrorBanner } from './components/SyncErrorBanner'
 import { CalendarPage } from './features/calendar/CalendarPage'
 import { EntryPage } from './features/entry/EntryPage'
@@ -19,6 +20,7 @@ function App() {
   return (
     <HashRouter>
       <SyncErrorBanner />
+      <OfflineBanner />
       <div className="min-h-dvh bg-surface-0 pb-20">
         <Routes>
           <Route path="/" element={<CalendarPage />} />
