@@ -7,6 +7,7 @@ import {
   listNoteVersions,
   reorderNotes,
   restoreNoteVersion,
+  setNotePinned,
   updateNote,
 } from './notes.repo'
 
@@ -27,6 +28,32 @@ describe('notes.repo', () => {
 
     expect(first.order).toBe(0)
     expect(second.order).toBe(1)
+    expect(first.pinned).toBe(false)
+  })
+
+  it('returns pinned notes first, keeping manual order within each group', async () => {
+    const a = await createNote()
+    const b = await createNote()
+    const c = await createNote()
+
+    await setNotePinned(b.id, true)
+
+    const ordered = await listNotes()
+    expect(ordered.map((n) => n.id)).toEqual([b.id, a.id, c.id])
+    expect(ordered[0].pinned).toBe(true)
+  })
+
+  it('pinning does not touch content or create a version snapshot', async () => {
+    const note = await createNote()
+    await updateNote(note.id, { title: 'Groceries' })
+    const versionsBefore = await listNoteVersions(note.id)
+
+    await setNotePinned(note.id, true)
+
+    const [stored] = await listNotes()
+    expect(stored.pinned).toBe(true)
+    expect(stored.title).toBe('Groceries')
+    expect(await listNoteVersions(note.id)).toHaveLength(versionsBefore.length)
   })
 
   it('updates fields and refreshes updatedAt', async () => {

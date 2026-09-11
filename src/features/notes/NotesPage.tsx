@@ -20,6 +20,7 @@ import { Button } from '../../components/Button'
 import { EmptyState } from '../../components/EmptyState'
 import { PlusIcon } from '../../components/icons'
 import { triggerSync } from '../../sync/triggerSync'
+import { NoteActionsSheet } from './NoteActionsSheet'
 import { NoteCard } from './NoteCard'
 import { NoteEditor } from './NoteEditor'
 import {
@@ -34,6 +35,7 @@ import {
 export function NotesPage() {
   const notes = useLiveQuery(() => listNotes(), [])
   const [openNoteId, setOpenNoteId] = useState<string | null>(null)
+  const [actionNoteId, setActionNoteId] = useState<string | null>(null)
   const pendingDeleteId = useSyncExternalStore(subscribePendingNoteDeletion, getPendingNoteDeletionId)
 
   // A note being deleted is hidden immediately (optimistically), even
@@ -66,6 +68,7 @@ export function NotesPage() {
   }
 
   const openNote = notes?.find((n) => n.id === openNoteId)
+  const actionNote = notes?.find((n) => n.id === actionNoteId)
 
   return (
     <div className="safe-top mx-auto max-w-3xl px-4 pt-6">
@@ -91,7 +94,12 @@ export function NotesPage() {
           <SortableContext items={visibleNotes.map((n) => n.id)} strategy={rectSortingStrategy}>
             <div className="grid grid-cols-2 gap-3 pb-10 animate-fade-in sm:grid-cols-3 md:grid-cols-4">
               {visibleNotes.map((note) => (
-                <NoteCard key={note.id} note={note} onOpen={() => setOpenNoteId(note.id)} />
+                <NoteCard
+                  key={note.id}
+                  note={note}
+                  onOpen={() => setOpenNoteId(note.id)}
+                  onLongPress={() => setActionNoteId(note.id)}
+                />
               ))}
             </div>
           </SortableContext>
@@ -99,6 +107,8 @@ export function NotesPage() {
       )}
 
       {openNote && <NoteEditor note={openNote} onClose={() => setOpenNoteId(null)} />}
+
+      {actionNote && <NoteActionsSheet note={actionNote} onClose={() => setActionNoteId(null)} />}
 
       {pendingDeleteId && (
         <div className="safe-bottom fixed inset-x-0 bottom-20 z-40 flex justify-center px-4">

@@ -3,29 +3,34 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { Note } from '../../db/types'
 import { updateNote } from '../../db/notes.repo'
-import { DragHandleIcon } from '../../components/icons'
+import { DragHandleIcon, PinIcon } from '../../components/icons'
+import { useLongPress } from '../../hooks/useLongPress'
 import { triggerSync } from '../../sync/triggerSync'
 
 interface NoteCardProps {
   note: Note
   onOpen: () => void
+  onLongPress: () => void
 }
 
 const PREVIEW_CHECKLIST_LIMIT = 6
 
 /** A compact Keep-style preview tile. Tap anywhere on the card to open the
- *  fullscreen editor; checklist items can be ticked off directly from the
- *  preview without opening it. */
-export function NoteCard({ note, onOpen }: NoteCardProps) {
+ *  fullscreen editor; long-press opens the pin/delete action sheet; pinned
+ *  notes show a pin in the corner. Checklist items can be ticked off directly
+ *  from the preview without opening it. */
+export function NoteCard({ note, onOpen, onLongPress }: NoteCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: note.id,
   })
+  const { pointerProps, tap } = useLongPress(onLongPress)
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
   }
 
+  const isPinned = note.pinned === true
   const isEmpty = !note.title && !note.body && note.checklist.length === 0
   const shownItems = note.checklist.slice(0, PREVIEW_CHECKLIST_LIMIT)
   const hiddenCount = note.checklist.length - shownItems.length
@@ -43,27 +48,35 @@ export function NoteCard({ note, onOpen }: NoteCardProps) {
     <div
       ref={setNodeRef}
       style={style}
-      onClick={onOpen}
+      {...pointerProps}
+      onClick={tap(onOpen)}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && onOpen()}
-      className={`group relative flex max-h-80 min-h-24 cursor-pointer flex-col gap-2 overflow-hidden break-inside-avoid rounded-2xl border border-border bg-surface-1 p-3 transition-colors duration-150 hover:bg-surface-2 ${
+      className={`group relative flex max-h-80 min-h-24 cursor-pointer select-none flex-col gap-2 overflow-hidden break-inside-avoid rounded-2xl border border-border bg-surface-1 p-3 transition-colors duration-150 hover:bg-surface-2 ${
         isDragging ? 'opacity-60' : ''
       }`}
     >
-      <button
-        type="button"
-        className="absolute right-2 top-2 cursor-grab touch-none text-ink-tertiary opacity-0 transition-opacity duration-150 active:cursor-grabbing group-hover:opacity-100"
-        aria-label="Drag to reorder"
-        onClick={(e) => e.stopPropagation()}
-        {...attributes}
-        {...listeners}
-      >
-        <DragHandleIcon width={16} height={16} />
-      </button>
+      <div className="absolute right-2 top-2 flex items-center gap-1">
+        {isPinned && (
+          <PinIcon width={15} height={15} className="text-ink-tertiary" aria-label="Pinned note" />
+        )}
+        <button
+          type="button"
+          className="cursor-grab touch-none text-ink-tertiary opacity-0 transition-opacity duration-150 active:cursor-grabbing group-hover:opacity-100"
+          aria-label="Drag to reorder"
+          onClick={(e) => e.stopPropagation()}
+          {...attributes}
+          {...listeners}
+        >
+          <DragHandleIcon width={16} height={16} />
+        </button>
+      </div>
 
       {note.title && (
-        <h3 className="line-clamp-2 pr-6 font-medium text-ink-primary">{note.title}</h3>
+        <h3 className={`line-clamp-2 font-medium text-ink-primary ${isPinned ? 'pr-12' : 'pr-6'}`}>
+          {note.title}
+        </h3>
       )}
 
       {note.body && (

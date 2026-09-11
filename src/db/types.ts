@@ -9,6 +9,10 @@ export interface JournalEntry {
   id: string
   title: string
   body: string
+  /** Whether the user recorded a gym session this day (NHS weekly tracker). */
+  gym: boolean
+  /** Minutes of vigorous activity recorded this day (NHS weekly tracker). */
+  vigorousMinutes: number
   createdAt: number
   updatedAt: number
 }
@@ -37,7 +41,7 @@ export interface ChecklistItem {
  */
 export interface Tombstone {
   id: string
-  type: 'entry' | 'note'
+  type: 'entry' | 'note' | 'birthday'
   deletedAt: number
 }
 
@@ -46,9 +50,26 @@ export interface Note {
   id: string
   /** Position in the user's manually-sorted list (lower = earlier). */
   order: number
+  /** Pinned notes render above unpinned ones and stay when synced. */
+  pinned: boolean
   title: string
   body: string
   checklist: ChecklistItem[]
+  createdAt: number
+  updatedAt: number
+}
+
+/**
+ * A birthday: a yearless month + day that recurs every year (e.g. a family
+ * member's birthday, shown as a green dot on the calendar each year).
+ */
+export interface Birthday {
+  id: string
+  name: string
+  /** 1-12. */
+  month: number
+  /** 1-N, always a real date for its month. */
+  day: number
   createdAt: number
   updatedAt: number
 }

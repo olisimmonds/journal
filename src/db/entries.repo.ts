@@ -10,11 +10,14 @@ export async function getEntry(dateId: string): Promise<JournalEntry | undefined
 /**
  * Creates or updates the entry for a given date. Callers pass only the
  * fields the user edited; `createdAt` is preserved on update and `updatedAt`
- * is always refreshed so sync can detect the change.
+ * is always refreshed so sync can detect the change. Untouched fields
+ * (including the health-tracker `gym`/`vigorousMinutes`) carry over from the
+ * existing row, and default to "not recorded" for brand-new entries — old
+ * entries stored before those fields existed read the same way.
  */
 export async function upsertEntry(
   dateId: string,
-  fields: { title?: string; body?: string },
+  fields: { title?: string; body?: string; gym?: boolean; vigorousMinutes?: number },
 ): Promise<JournalEntry> {
   const now = Date.now()
   const existing = await db.entries.get(dateId)
@@ -23,6 +26,8 @@ export async function upsertEntry(
     id: dateId,
     title: fields.title ?? existing?.title ?? '',
     body: fields.body ?? existing?.body ?? '',
+    gym: fields.gym ?? existing?.gym ?? false,
+    vigorousMinutes: fields.vigorousMinutes ?? existing?.vigorousMinutes ?? 0,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   }

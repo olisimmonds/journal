@@ -5,6 +5,7 @@ import type { EntrySummary } from './useCalendarEntries'
 interface WeekViewProps {
   anchor: Date
   summaries: Map<string, EntrySummary> | undefined
+  birthdayDateIds?: Set<string>
   todayId: string
   onSelectDay: (dateId: string) => void
 }
@@ -16,12 +17,13 @@ interface WeekViewProps {
  * and a preview of the body without opening it, which is the whole point of
  * zooming in from the month grid.
  */
-export function WeekView({ anchor, summaries, todayId, onSelectDay }: WeekViewProps) {
+export function WeekView({ anchor, summaries, birthdayDateIds, todayId, onSelectDay }: WeekViewProps) {
   return (
     <div className="animate-fade-in divide-y divide-border border-y border-border">
       {getWeekDays(anchor).map((day) => {
         const summary = summaries?.get(day.dateId)
         const isToday = day.dateId === todayId
+        const hasBirthday = birthdayDateIds?.has(day.dateId)
 
         return (
           <button
@@ -30,17 +32,25 @@ export function WeekView({ anchor, summaries, todayId, onSelectDay }: WeekViewPr
             onClick={() => onSelectDay(day.dateId)}
             className="flex min-h-16 w-full gap-3 px-1 py-3 text-left transition-colors duration-150 hover:bg-surface-2"
           >
-            <div className="flex w-10 shrink-0 flex-col items-center gap-1">
+            <div className="relative flex w-10 shrink-0 flex-col items-center gap-1">
               <span className="text-[10px] tracking-wide text-ink-tertiary uppercase">
                 {day.date.toLocaleDateString(undefined, { weekday: 'short' })}
               </span>
-              <span
-                className={`flex size-7 items-center justify-center rounded-full text-sm ${
-                  isToday ? 'bg-ink-primary font-semibold text-surface-0' : 'text-ink-primary'
-                }`}
-              >
-                {day.date.getDate()}
-              </span>
+              <div className="relative">
+                <span
+                  className={`flex size-7 items-center justify-center rounded-full text-sm ${
+                    isToday ? 'bg-ink-primary font-semibold text-surface-0' : 'text-ink-primary'
+                  }`}
+                >
+                  {day.date.getDate()}
+                </span>
+                {hasBirthday && (
+                  <span
+                    className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-success ring-1 ring-surface-0"
+                    aria-label="Birthday"
+                  />
+                )}
+              </div>
             </div>
 
             <div className="min-w-0 flex-1 self-center">

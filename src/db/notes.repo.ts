@@ -64,8 +64,26 @@ export async function restoreNoteVersion(noteId: string, versionId: string): Pro
   })
 }
 
+/**
+ * All notes, pinned first and then in manual order. Old notes predating the
+ * `pinned` field simply read as unpinned (`undefined` is falsy), so no data
+ * migration is needed for the field to behave correctly.
+ */
 export async function listNotes(): Promise<Note[]> {
-  return db.notes.orderBy('order').toArray()
+  const notes = await db.notes.orderBy('order').toArray()
+  return notes.sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+    return a.order - b.order
+  })
+}
+
+/**
+ * Pins or unpins a note. Unlike `updateNote` this does not snapshot version
+ * history (pinning is a layout change, not a content edit) but still bumps
+ * `updatedAt` so the change roams with Drive sync.
+ */
+export async function setNotePinned(id: string, pinned: boolean): Promise<void> {
+  await db.notes.update(id, { pinned, updatedAt: Date.now() })
 }
 
 export async function getNote(id: string): Promise<Note | undefined> {
@@ -79,6 +97,7 @@ export async function createNote(): Promise<Note> {
   const note: Note = {
     id: crypto.randomUUID(),
     order: (highestOrder?.order ?? -1) + 1,
+    pinned: false,
     title: '',
     body: '',
     checklist: [],

@@ -1,8 +1,8 @@
 import { base64ToBuffer, bufferToBase64 } from '../utils/base64'
 import { db } from '../db/schema'
-import type { ImageAttachment, JournalEntry, Note, Tombstone } from '../db/types'
+import type { Birthday, ImageAttachment, JournalEntry, Note, Tombstone } from '../db/types'
 
-export const BACKUP_FORMAT_VERSION = 1
+export const BACKUP_FORMAT_VERSION = 2
 
 /** The full contents of the app — the shape stored for Drive backup and also
  *  produced verbatim by the plain-JSON export feature. */
@@ -12,6 +12,7 @@ export interface BackupData {
   entries: JournalEntry[]
   images: SerializedImage[]
   notes: Note[]
+  birthdays: Birthday[]
   tombstones: Tombstone[]
 }
 
@@ -26,10 +27,11 @@ export interface SerializedImage {
 }
 
 export async function buildBackupData(): Promise<BackupData> {
-  const [entries, images, notes, tombstones] = await Promise.all([
+  const [entries, images, notes, birthdays, tombstones] = await Promise.all([
     db.entries.orderBy('id').toArray(),
     db.images.toArray(),
     db.notes.orderBy('order').toArray(),
+    db.birthdays.toArray(),
     db.tombstones.toArray(),
   ])
 
@@ -41,6 +43,7 @@ export async function buildBackupData(): Promise<BackupData> {
     entries,
     images: serializedImages,
     notes,
+    birthdays,
     tombstones,
   }
 }

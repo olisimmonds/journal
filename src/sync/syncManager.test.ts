@@ -2,23 +2,25 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '../db/schema'
 import { upsertEntry } from '../db/entries.repo'
 import { createNote } from '../db/notes.repo'
-import type { BackupData } from './backupSerializer'
+import { BACKUP_FORMAT_VERSION, type BackupData } from './backupSerializer'
 import { mergeRemoteIntoLocal } from './syncManager'
 
 beforeEach(async () => {
   await db.entries.clear()
   await db.images.clear()
   await db.notes.clear()
+  await db.birthdays.clear()
   await db.tombstones.clear()
 })
 
 function emptyRemote(overrides: Partial<BackupData> = {}): BackupData {
   return {
-    version: 1,
+    version: BACKUP_FORMAT_VERSION,
     exportedAt: Date.now(),
     entries: [],
     images: [],
     notes: [],
+    birthdays: [],
     tombstones: [],
     ...overrides,
   }
@@ -27,7 +29,9 @@ function emptyRemote(overrides: Partial<BackupData> = {}): BackupData {
 describe('mergeRemoteIntoLocal', () => {
   it('adds a remote entry that does not exist locally', async () => {
     const remote = emptyRemote({
-      entries: [{ id: '2026-07-09', title: 'Remote', body: 'From another device', createdAt: 1, updatedAt: 1 }],
+      entries: [
+        { id: '2026-07-09', title: 'Remote', body: 'From another device', gym: false, vigorousMinutes: 0, createdAt: 1, updatedAt: 1 },
+      ],
     })
 
     const stats = await mergeRemoteIntoLocal(remote)
@@ -42,7 +46,7 @@ describe('mergeRemoteIntoLocal', () => {
     const local = await db.entries.get('2026-07-09')
 
     const remote = emptyRemote({
-      entries: [{ id: '2026-07-09', title: 'Remote newer', body: 'y', createdAt: local!.createdAt, updatedAt: local!.updatedAt + 1000 }],
+      entries: [{ id: '2026-07-09', title: 'Remote newer', body: 'y', gym: false, vigorousMinutes: 0, createdAt: local!.createdAt, updatedAt: local!.updatedAt + 1000 }],
     })
 
     await mergeRemoteIntoLocal(remote)
@@ -55,7 +59,7 @@ describe('mergeRemoteIntoLocal', () => {
     const local = await db.entries.get('2026-07-09')
 
     const remote = emptyRemote({
-      entries: [{ id: '2026-07-09', title: 'Remote older', body: 'y', createdAt: local!.createdAt, updatedAt: local!.updatedAt - 1000 }],
+      entries: [{ id: '2026-07-09', title: 'Remote older', body: 'y', gym: false, vigorousMinutes: 0, createdAt: local!.createdAt, updatedAt: local!.updatedAt - 1000 }],
     })
 
     await mergeRemoteIntoLocal(remote)
@@ -70,7 +74,7 @@ describe('mergeRemoteIntoLocal', () => {
     await db.tombstones.put({ id: '2026-07-09', type: 'entry', deletedAt: local!.updatedAt + 500 })
 
     const remote = emptyRemote({
-      entries: [{ id: '2026-07-09', title: 'Stale remote copy', body: 'x', createdAt: local!.createdAt, updatedAt: local!.updatedAt }],
+      entries: [{ id: '2026-07-09', title: 'Stale remote copy', body: 'x', gym: false, vigorousMinutes: 0, createdAt: local!.createdAt, updatedAt: local!.updatedAt }],
     })
 
     await mergeRemoteIntoLocal(remote)
@@ -99,6 +103,7 @@ describe('mergeRemoteIntoLocal', () => {
         {
           id: note.id,
           order: note.order,
+          pinned: false,
           title: 'Remote title',
           body: 'Remote body',
           checklist: [],
@@ -112,5 +117,39 @@ describe('mergeRemoteIntoLocal', () => {
 
     expect(stats.mergedNotes).toBe(1)
     expect((await db.notes.get(note.id))?.title).toBe('Remote title')
+  })
+
+  it('merges a new birthday and applies a remote birthday tombstone', async () => {
+    const added = await mergeRemoteIntoLocal(
+      emptyRemote({
+        birthdays: [{ id: 'b-1', name: 'Gran', month: 12, day: 25, createdAt: 1, updatedAt: 1 }],
+      }),
+    )
+    expect(added.mergedBirthdays).toBe(1)
+    expect((await db.birthdays.get('b-1'))?.name).toBe('Gran')
+
+    const deleted = await mergeRemoteIntoLocal(
+      emptyRemote({
+        tombstones: [{ id: 'b-1', type: 'birthday', deletedAt: 999 }],
+      }),
+    )
+    expect((await db.birthdays.get('b-1'))).toBeUndefined()
+    expect(deleted.mergedBirthdays).toBe(0)
+  })
+
+  it('ignores a backup written before birthdays existed (no birthdays key)', async () => {
+    // A real v1 backup has no `birthdays` key at all — cast through unknown is
+    // the honest way to feed that legacy shape into the typed merge function.
+    const remote = {
+      version: 1,
+      exportedAt: Date.now(),
+      entries: [],
+      images: [],
+      notes: [],
+      tombstones: [],
+    } as unknown as BackupData
+
+    const stats = await mergeRemoteIntoLocal(remote)
+    expect(stats.mergedBirthdays).toBe(0)
   })
 })

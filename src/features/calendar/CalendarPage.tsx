@@ -22,6 +22,8 @@ import { WeekView } from './WeekView'
 import { YearView } from './YearView'
 import { ZoomSwitcher } from './ZoomSwitcher'
 import { useEntrySummaries } from './useCalendarEntries'
+import { useBirthdayDateIds } from '../birthdays/useBirthdayDateIds'
+import { useWeekFitness } from '../health/useWeekFitness'
 
 /**
  * Home page: the calendar, at one of three zoom levels (year / month / week),
@@ -54,6 +56,11 @@ export function CalendarPage() {
   }, [zoom, anchor])
 
   const summaries = useEntrySummaries(rangeStart, rangeEnd)
+  // Birthdays are yearless dates, so both the month and week views get their
+  // green dots from one range query. The month view's weekly health verdicts
+  // come from the same entries range the month grid renders.
+  const birthdayDateIds = useBirthdayDateIds(rangeStart, rangeEnd)
+  const weekFitness = useWeekFitness(rangeStart, rangeEnd)
 
   /**
    * Date navigation replaces history while zooming pushes it, so that `back`
@@ -126,6 +133,8 @@ export function CalendarPage() {
           year={anchor.getFullYear()}
           month={anchor.getMonth()}
           summaries={summaries}
+          weekFitness={weekFitness}
+          birthdayDateIds={birthdayDateIds}
           todayId={todayId}
           onSelectDay={handleSelectDay}
         />
@@ -134,6 +143,7 @@ export function CalendarPage() {
         <WeekView
           anchor={anchor}
           summaries={summaries}
+          birthdayDateIds={birthdayDateIds}
           todayId={todayId}
           onSelectDay={handleSelectDay}
         />

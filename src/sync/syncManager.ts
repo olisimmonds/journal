@@ -51,6 +51,7 @@ export interface SyncResult {
   /** Records pulled from Drive that were newer than the local copy. */
   mergedEntries: number
   mergedNotes: number
+  mergedBirthdays: number
   pushedAt: number
 }
 
@@ -67,11 +68,12 @@ export async function syncWithGoogleDrive(): Promise<SyncResult> {
 
   let mergedEntries = 0
   let mergedNotes = 0
+  let mergedBirthdays = 0
 
   if (fileId) {
     const raw = await downloadBackupContent(accessToken, fileId)
     const remote = JSON.parse(raw) as BackupData
-    ;({ mergedEntries, mergedNotes } = await mergeRemoteIntoLocal(remote))
+    ;({ mergedEntries, mergedNotes, mergedBirthdays } = await mergeRemoteIntoLocal(remote))
   }
 
   const localData = await buildBackupData()
@@ -89,7 +91,7 @@ export async function syncWithGoogleDrive(): Promise<SyncResult> {
   const pushedAt = Date.now()
   localStorage.setItem(LAST_SYNCED_STORAGE_KEY, String(pushedAt))
 
-  return { mergedEntries, mergedNotes, pushedAt }
+  return { mergedEntries, mergedNotes, mergedBirthdays, pushedAt }
 }
 
 /**
@@ -102,15 +104,17 @@ export async function syncWithGoogleDrive(): Promise<SyncResult> {
  */
 export async function mergeRemoteIntoLocal(
   remote: BackupData,
-): Promise<{ mergedEntries: number; mergedNotes: number }> {
+): Promise<{ mergedEntries: number; mergedNotes: number; mergedBirthdays: number }> {
   let mergedEntries = 0
   let mergedNotes = 0
+  let mergedBirthdays = 0
 
   await db.transaction(
     'rw',
     db.entries,
     db.images,
     db.notes,
+    db.birthdays,
     db.tombstones,
     async () => {
       const localTombstones = await db.tombstones.toArray()
@@ -126,8 +130,10 @@ export async function mergeRemoteIntoLocal(
         if (remoteTombstone.type === 'entry') {
           await db.images.where('entryId').equals(remoteTombstone.id).delete()
           await db.entries.delete(remoteTombstone.id)
-        } else {
+        } else if (remoteTombstone.type === 'note') {
           await db.notes.delete(remoteTombstone.id)
+        } else {
+          await db.birthdays.delete(remoteTombstone.id)
         }
       }
 
@@ -162,10 +168,23 @@ export async function mergeRemoteIntoLocal(
           mergedNotes++
         }
       }
+
+      // `remote.birthdays` may be missing entirely when merging a backup
+      // written before birthdays existed (format v1) — treat as empty.
+      for (const remoteBirthday of remote.birthdays ?? []) {
+        const tombstone = tombstoneByRecordId.get(remoteBirthday.id)
+        if (tombstone && tombstone.deletedAt >= remoteBirthday.updatedAt) continue
+
+        const localBirthday = await db.birthdays.get(remoteBirthday.id)
+        if (!localBirthday || remoteBirthday.updatedAt > localBirthday.updatedAt) {
+          await db.birthdays.put(remoteBirthday)
+          mergedBirthdays++
+        }
+      }
     },
   )
 
-  return { mergedEntries, mergedNotes }
+  return { mergedEntries, mergedNotes, mergedBirthdays }
 }
 
 export async function disconnectGoogleDrive(): Promise<void> {

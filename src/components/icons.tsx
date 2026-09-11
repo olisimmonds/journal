@@ -118,3 +118,25 @@ export function DragHandleIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function PinIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 21s-6.5-5.1-6.5-11a6.5 6.5 0 0 1 13 0c0 5.9-6.5 11-6.5 11Z" />
+      <circle cx="12" cy="10" r="2.5" />
+    </svg>
+  )
+}
+
+export function CakeIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 21h16v-7a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v7Z" />
+      <path d="M5 18c1-1 2-1 3 0s2 1 3 0 2-1 3 0 2 1 3 0" />
+      <path d="M8 13v-3M12 13v-5M16 13v-3" />
+      <circle cx="8" cy="8.5" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="6.5" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="8.5" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}

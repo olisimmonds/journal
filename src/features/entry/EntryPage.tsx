@@ -17,6 +17,7 @@ import { triggerSync } from '../../sync/triggerSync'
 import { EntryEditor } from './EntryEditor'
 import { ImageGallery } from './ImageGallery'
 import { useAutosave } from './useAutosave'
+import { FitnessWidgets } from '../health/FitnessWidgets'
 
 /** Route wrapper: remounts the editor whenever the date param changes, so
  *  no per-day state (autosave timers, loaded-flag) leaks between days. */
@@ -43,6 +44,8 @@ function EntryPageContent({ dateId }: { dateId: string }) {
 
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
+  const [gym, setGym] = useState(false)
+  const [vigorousMinutes, setVigorousMinutes] = useState(0)
   const hasSyncedInitialValue = useRef(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -50,10 +53,12 @@ function EntryPageContent({ dateId }: { dateId: string }) {
     if (!loadedEntry || hasSyncedInitialValue.current) return
     setTitle(loadedEntry.entry?.title ?? '')
     setBody(loadedEntry.entry?.body ?? '')
+    setGym(loadedEntry.entry?.gym ?? false)
+    setVigorousMinutes(loadedEntry.entry?.vigorousMinutes ?? 0)
     hasSyncedInitialValue.current = true
   }, [loadedEntry])
 
-  const saveStatus = useAutosave({ title, body }, async (value) => {
+  const saveStatus = useAutosave({ title, body, gym, vigorousMinutes }, async (value) => {
     await upsertEntry(dateId, value)
     triggerSync()
   })
@@ -83,8 +88,8 @@ function EntryPageContent({ dateId }: { dateId: string }) {
   const handleBack = async () => {
     // Flush the latest edit immediately rather than relying on the debounce
     // timer, which is cancelled on unmount and would otherwise drop an edit
-    // made in the last 600ms before navigating away.
-    await upsertEntry(dateId, { title, body })
+    // (including a just-toggled health widget) made in the last 600ms.
+    await upsertEntry(dateId, { title, body, gym, vigorousMinutes })
     triggerSync()
     navigate(backTo)
   }
@@ -113,6 +118,13 @@ function EntryPageContent({ dateId }: { dateId: string }) {
           onTitleChange={setTitle}
           onBodyChange={setBody}
           saveStatus={saveStatus}
+        />
+
+        <FitnessWidgets
+          gym={gym}
+          vigorousMinutes={vigorousMinutes}
+          onGymChange={setGym}
+          onVigorousMinutesChange={setVigorousMinutes}
         />
 
         <ImageGallery

@@ -11,9 +11,16 @@ Android, and desktop, and works fully offline.
 
 - **Calendar journal** — monthly view, today highlighted, days with entries marked and their
   title shown directly on the day cell, unlimited text, inline images, autosave, full-text
-  search.
+  search. Birthdays appear as a small green dot on their day.
+- **Health** — two quick trackers on each day's entry page: a gym session toggle and daily
+  vigorous-minutes count. Against NHS-style weekly targets (2 gym sessions + 75 min vigorous),
+  each week of the month view gets a green/amber/red verdict dot next to its row — for the
+  current and past weeks only, so future weeks aren't judged before they happen.
+- **Birthdays** — yearless recurring birthdays (never age), managed from a dedicated tab inside
+  search and drawn as a green dot on the calendar.
 - **Notes** — separate from the calendar, unlimited notes, checklists, drag-to-reorder, autosave,
-  version history (undo an accidental edit or full deletion of a note's text).
+  version history (undo an accidental edit or full deletion of a note's text). Long-press a note
+  for actions: pin/unpin (pinned notes stay on top) and delete with an Undo snackbar.
 - **Privacy** — all data lives in IndexedDB on your device. Cloud backup is a single, visible
   JSON file (`journal-backup.json`) in the root of your own Google Drive — you can open it,
   download it, or inspect it any time. The app can only ever see files it created itself, never
@@ -37,13 +44,15 @@ Android, and desktop, and works fully offline.
 
 ```
 src/
-  db/         Dexie schema + typed repositories (entries, notes, images, tombstones)
+  db/         Dexie schema + typed repositories (entries, notes, birthdays, images, tombstones)
   sync/       Google OAuth, Drive REST client, backup serializer, merge/sync manager,
               fire-and-forget sync trigger, sync error pub/sub
   features/
     calendar/ Monthly grid, day cells (showing entry titles), entry-marker live query
-    entry/    Per-day editor: title, body, autosave, inline images
-    notes/    Persistent notes: CRUD, checklist, drag-to-reorder
+    entry/    Per-day editor: title, body, autosave, inline images, gym/vigorous trackers
+    notes/    Persistent notes: CRUD, checklist, pinning (long-press actions), drag-to-reorder
+    birthdays/ Yearless birthday records + the calendar's green-dot lookup
+    health/   Weekly NHS target aggregation (weekFitness) feeding the month view's verdict dots
     search/   Full-text search across entries
   components/ Reusable UI primitives (Button, Modal, ConfirmDialog, icons, SyncErrorBanner, ...)
   utils/      Date helpers, base64 codec, file download helper
@@ -67,7 +76,8 @@ it's a natural place to extend the project (see `src/sync/syncManager.ts`).
 
 **There is no manual "sync now" button.** `src/sync/triggerSync.ts` is called after every
 mutating action — an entry autosaving, tapping back on an entry, deleting an entry, adding/
-removing a photo, and creating/editing/deleting/reordering a note — plus once on app load and
+removing a photo, toggling gym or setting vigorous minutes, adding/deleting a birthday, pinning/
+unpinning a note, and creating/editing/deleting/reordering a note — plus once on app load and
 whenever the device regains a network connection (`src/sync/useBackgroundSync.ts`). Each call is
 fire-and-forget so the UI never blocks on network I/O.
 

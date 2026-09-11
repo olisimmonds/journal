@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type {
+  Birthday,
   ImageAttachment,
   JournalEntry,
   Note,
@@ -24,6 +25,7 @@ export class JournalDatabase extends Dexie {
   tombstones!: EntityTable<Tombstone, 'id'>
   noteVersions!: EntityTable<NoteVersion, 'id'>
   authTokens!: EntityTable<StoredGoogleAuth, 'id'>
+  birthdays!: EntityTable<Birthday, 'id'>
 
   constructor() {
     super('journal-db')
@@ -58,6 +60,18 @@ export class JournalDatabase extends Dexie {
       tombstones: 'id, deletedAt',
       noteVersions: 'id, noteId, savedAt',
       authTokens: 'id',
+    })
+
+    // Birthdays (yearless month + day, recurring every year) — synced to
+    // Drive like entries and notes, so they roam across devices.
+    this.version(4).stores({
+      entries: 'id, updatedAt',
+      images: 'id, entryId, order',
+      notes: 'id, order, updatedAt',
+      tombstones: 'id, deletedAt',
+      noteVersions: 'id, noteId, savedAt',
+      authTokens: 'id',
+      birthdays: 'id, updatedAt',
     })
   }
 }

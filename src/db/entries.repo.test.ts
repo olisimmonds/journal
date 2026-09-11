@@ -33,6 +33,22 @@ describe('entries.repo', () => {
     expect(await getEntry('2026-01-01')).toBeUndefined()
   })
 
+  it('defaults the health-tracker fields for a brand-new entry', async () => {
+    const entry = await upsertEntry('2026-07-09', {})
+    expect(entry.gym).toBe(false)
+    expect(entry.vigorousMinutes).toBe(0)
+  })
+
+  it('preserves gym and vigorous minutes across later text-only upserts', async () => {
+    await upsertEntry('2026-07-09', { gym: true, vigorousMinutes: 40 })
+    await upsertEntry('2026-07-09', { title: 'Hike', body: '' })
+
+    const entry = await getEntry('2026-07-09')
+    expect(entry?.title).toBe('Hike')
+    expect(entry?.gym).toBe(true)
+    expect(entry?.vigorousMinutes).toBe(40)
+  })
+
   it('lists entries within an inclusive date range', async () => {
     await upsertEntry('2026-07-01', { body: 'a' })
     await upsertEntry('2026-07-15', { body: 'b' })
