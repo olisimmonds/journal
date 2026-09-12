@@ -12,7 +12,8 @@ import {
 import { formatFullDate } from '../../utils/date'
 import { Button } from '../../components/Button'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
-import { ChevronLeftIcon, TrashIcon } from '../../components/icons'
+import { CakeIcon, ChevronLeftIcon, TrashIcon } from '../../components/icons'
+import { useBirthdaysForDate } from '../birthdays/useBirthdaysForDate'
 import { triggerSync } from '../../sync/triggerSync'
 import { EntryEditor } from './EntryEditor'
 import { ImageGallery } from './ImageGallery'
@@ -41,6 +42,7 @@ function EntryPageContent({ dateId }: { dateId: string }) {
     [dateId],
   )
   const images = useLiveQuery(() => listImagesForEntry(dateId), [dateId]) ?? []
+  const birthdays = useBirthdaysForDate(dateId)
 
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
@@ -110,6 +112,17 @@ function EntryPageContent({ dateId }: { dateId: string }) {
           <TrashIcon />
         </Button>
       </header>
+
+      {birthdays && birthdays.length > 0 && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-border bg-surface-1 px-3 py-2 text-sm text-ink-primary">
+          <CakeIcon width={16} height={16} className="shrink-0 text-success" />
+          <span>
+            {birthdays.length === 1
+              ? `${birthdays[0].name}'s birthday`
+              : `Birthdays: ${birthdays.map((b) => b.name).join(', ')}`}
+          </span>
+        </div>
+      )}
 
       <div className="flex flex-col gap-6 pb-10 animate-fade-in">
         <EntryEditor
